@@ -1,0 +1,400 @@
+---
+title: iMessage
+description: Native Apple Messages support on macOS
+icon: apple
+---
+
+SimpleClaw integrates with iMessage on macOS, providing native Apple Messages support for direct messages and group chats.
+
+## Features
+
+- Direct messages and group chats
+- Media support (images, videos, documents)
+- Native macOS integration
+- SMS/MMS support (if iPhone connected)
+- Reply threading
+- Works with existing Messages.app conversations
+
+## Requirements
+
+- macOS 10.14 (Mojave) or later
+- Messages.app configured with iMessage account
+- Full Disk Access permission for SimpleClaw
+- `imsg` CLI tool (bundled with SimpleClaw)
+
+## Setup
+
+<Steps>
+  <Step title="Grant Full Disk Access">
+    SimpleClaw needs access to Messages database:
+    
+    1. Open System Settings → Privacy & Security → Full Disk Access
+    2. Click the lock and authenticate
+    3. Click "+" and add Terminal (or your terminal app)
+    4. If using SimpleClaw macOS app, add it to the list
+    
+    <Warning>
+      Full Disk Access is required to read the Messages database at `~/Library/Messages/chat.db`
+    </Warning>
+  </Step>
+  
+  <Step title="Enable iMessage Channel">
+    ```bash
+    simpleclaw config set channels.imessage.enabled true
+    ```
+  </Step>
+  
+  <Step title="Verify Configuration">
+    ```bash
+    simpleclaw channels status imessage
+    ```
+    
+    You should see iMessage as enabled and configured.
+  </Step>
+  
+  <Step title="Test Sending">
+    Send a test message:
+    
+    ```bash
+    simpleclaw message send imessage user@example.com "Test message"
+    ```
+    
+    Or to a phone number:
+    ```bash
+    simpleclaw message send imessage +1234567890 "Test SMS"
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+### Basic Configuration
+
+```yaml
+channels:
+  imessage:
+    enabled: true
+```
+
+### Custom Paths
+
+```yaml
+channels:
+  imessage:
+    enabled: true
+    cliPath: "/usr/local/bin/imsg"  # Custom imsg path
+    dbPath: "~/Library/Messages/chat.db"  # Custom Messages database path
+```
+
+### Service Selection
+
+```yaml
+channels:
+  imessage:
+    enabled: true
+    service: "iMessage"  # Options: iMessage, SMS
+```
+
+### Multi-Account Setup
+
+```yaml
+channels:
+  imessage:
+    enabled: true
+    accounts:
+      personal:
+        enabled: true
+        name: "Personal"
+        service: "iMessage"
+      sms:
+        enabled: true
+        name: "SMS"
+        service: "SMS"
+```
+
+## Security
+
+### DM Policy
+
+```yaml
+channels:
+  imessage:
+    dmPolicy: pairing  # Options: open, pairing, allowlist, off
+    allowFrom:
+      - "user@example.com"  # Email or phone number
+      - "+1234567890"
+```
+
+### Group Policy
+
+```yaml
+channels:
+  imessage:
+    groupPolicy: allowlist  # Options: allowlist, open, off
+    groupAllowFrom:
+      - "user@example.com"  # Who can trigger in groups
+```
+
+### Pairing Workflow
+
+With `dmPolicy: pairing`:
+
+1. User sends first message
+2. Approve: `simpleclaw pairing approve imessage user@example.com`
+3. User receives approval notification
+
+## Message Features
+
+### Sending Messages
+
+```bash
+# Send to iMessage user (email)
+simpleclaw message send imessage user@example.com "Hello!"
+
+# Send to phone number (SMS if not iMessage)
+simpleclaw message send imessage +1234567890 "Hello!"
+
+# Send with media
+simpleclaw message send imessage user@example.com "Photo" --media-url "/path/to/image.jpg"
+
+# Reply to message
+simpleclaw message send imessage user@example.com "Reply" --reply-to message-guid
+
+# Send to group (use chat ID)
+simpleclaw message send imessage "chat_id:123" "Group message"
+```
+
+### Target Formats
+
+- Email: `user@example.com`
+- Phone: `+1234567890` (E.164 format recommended)
+- Chat ID: `chat_id:123` (for groups)
+
+### Media Support
+
+```yaml
+channels:
+  imessage:
+    mediaMaxMb: 100  # Maximum media file size
+```
+
+Supported media types:
+- Images: JPEG, PNG, GIF, HEIC
+- Videos: MOV, MP4, M4V
+- Documents: PDF and others
+
+### Reply Threading
+
+iMessage supports replying to specific messages:
+
+```bash
+simpleclaw message send imessage user@example.com "Reply" --reply-to "message-guid"
+```
+
+## Group Chats
+
+### Finding Group Chat IDs
+
+Group chats use internal chat IDs from Messages database. You can:
+
+1. Check SimpleClaw logs for incoming group messages
+2. Query Messages database (advanced):
+   ```sql
+   SELECT ROWID, chat_identifier, display_name FROM chat WHERE chat_identifier LIKE '%chat%';
+   ```
+
+### Group Configuration
+
+iMessage groups use account-level policies:
+
+```yaml
+channels:
+  imessage:
+    groupPolicy: allowlist
+    groupAllowFrom:
+      - "user@example.com"  # Who can trigger
+```
+
+## Advanced Configuration
+
+### Region Settings
+
+For region-specific phone number handling:
+
+```yaml
+channels:
+  imessage:
+    region: "US"  # ISO 3166-1 alpha-2 country code
+```
+
+### Custom CLI Path
+
+If `imsg` is installed in a non-standard location:
+
+```yaml
+channels:
+  imessage:
+    cliPath: "/custom/path/to/imsg"
+```
+
+### Custom Database Path
+
+```yaml
+channels:
+  imessage:
+    dbPath: "/custom/path/to/chat.db"
+```
+
+### Default Recipient
+
+```yaml
+channels:
+  imessage:
+    defaultTo: "user@example.com"
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Permission Denied">
+    Ensure Full Disk Access is granted:
+    
+    1. System Settings → Privacy & Security → Full Disk Access
+    2. Add Terminal or SimpleClaw app
+    3. Restart terminal/app after granting access
+    
+    Test database access:
+    ```bash
+    sqlite3 ~/Library/Messages/chat.db "SELECT COUNT(*) FROM chat;"
+    ```
+  </Accordion>
+  
+  <Accordion title="imsg Command Not Found">
+    Verify `imsg` is installed:
+    
+    ```bash
+    which imsg
+    imsg --version
+    ```
+    
+    If not found, it should be bundled with SimpleClaw. Check installation.
+  </Accordion>
+  
+  <Accordion title="Messages Not Sending">
+    Verify Messages.app is working:
+    1. Open Messages.app
+    2. Send a test message manually
+    3. Check iMessage is signed in (Settings → iMessage)
+    
+    Check SimpleClaw status:
+    ```bash
+    simpleclaw channels status imessage --probe
+    ```
+  </Accordion>
+  
+  <Accordion title="SMS Not Working">
+    SMS requires iPhone connected via Text Message Forwarding:
+    
+    1. On iPhone: Settings → Messages → Text Message Forwarding
+    2. Enable forwarding to your Mac
+    3. Verify on Mac in Messages preferences
+  </Accordion>
+  
+  <Accordion title="Group Messages Not Received">
+    Check database access and ensure the group exists in Messages.app.
+    
+    Group messages may require specific chat IDs from the database.
+  </Accordion>
+</AccordionGroup>
+
+## CLI Commands
+
+```bash
+# Enable channel
+simpleclaw config set channels.imessage.enabled true
+
+# Status
+simpleclaw channels status imessage
+simpleclaw channels status imessage --probe
+
+# Send message
+simpleclaw message send imessage <handle> <message>
+
+# Pairing
+simpleclaw pairing approve imessage user@example.com
+simpleclaw pairing list imessage
+```
+
+## Limitations
+
+- macOS only (no Windows/Linux support)
+- Requires Full Disk Access permission
+- Depends on Messages.app and iMessage service
+- SMS requires iPhone with Text Message Forwarding
+- Group chat IDs can be difficult to determine
+- No native poll or advanced reaction support
+
+## API Reference
+
+iMessage channel implementation: `extensions/imessage/src/channel.ts`
+
+### Channel ID
+
+`imessage` (alias: `imsg`)
+
+### Target ID Format
+
+- Email: `user@example.com`
+- Phone: `+1234567890`
+- Chat: `chat_id:123`
+
+### Capabilities
+
+- Chat types: `direct`, `group`
+- Features: `media`
+- Delivery mode: `direct`
+- Text chunk limit: 4000 characters
+
+### Configuration Schema
+
+See `IMessageConfigSchema` in source for full schema.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Grant Full Disk Access" icon="lock">
+    Required for Messages database access
+  </Card>
+  
+  <Card title="Use E.164 for Phone Numbers" icon="phone">
+    International format ensures proper routing:
+    ```
+    +1234567890
+    ```
+  </Card>
+  
+  <Card title="Enable Pairing" icon="handshake">
+    Control who can message:
+    ```yaml
+    dmPolicy: pairing
+    ```
+  </Card>
+  
+  <Card title="Limit Media Size" icon="file-image">
+    Prevent large files:
+    ```yaml
+    mediaMaxMb: 50
+    ```
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Configuration" icon="shield" href="/security">
+    Configure DM policies and allowlists
+  </Card>
+  <Card title="Multi-Channel Setup" icon="network-wired" href="/channels/overview">
+    Connect additional platforms
+  </Card>
+</CardGroup>

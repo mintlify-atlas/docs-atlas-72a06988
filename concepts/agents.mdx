@@ -1,0 +1,384 @@
+---
+title: Agents
+description: Multi-agent system with isolated workspaces, models, and skills
+---
+
+SimpleClaw supports **multiple independent AI agents**, each with its own workspace, configuration, and conversation context. This allows you to run specialized agents for different tasks or audiences.
+
+## Agent Basics
+
+Each agent has:
+- **Unique ID** - Lowercase alphanumeric identifier (e.g., `main`, `support`, `research`)
+- **Workspace Directory** - Isolated file system for context files (SOUL.md, TOOLS.md, etc.)
+- **Model Configuration** - Primary model and fallback models
+- **Session Store** - Separate conversation history per agent
+- **Skill Filters** - Enable/disable specific capabilities
+
+```yaml
+# ~/.simpleclaw/config.yaml
+agents:
+  list:
+    - id: main
+      default: true
+      model:
+        primary: claude-3-7-sonnet-20250219
+        fallbacks:
+          - gpt-4o
+      workspace: ~/.simpleclaw/workspace
+      
+    - id: support
+      model: gpt-4o-mini
+      workspace: ~/.simpleclaw/workspace-support
+      skills:
+        exclude:
+          - web-search
+          - bash
+```
+
+## Workspace Structure
+
+Each agent has a dedicated workspace directory containing:
+
+<CodeGroup>
+```plaintext Directory Layout
+~/.simpleclaw/workspace/        # Main agent workspace
+├── SOUL.md                     # Agent personality and behavior
+├── AGENTS.md                   # Instructions for this agent
+├── TOOLS.md                    # Tool usage guidance
+├── USER.md                     # User context and preferences
+├── MEMORY.md                   # Long-term memory notes
+├── IDENTITY.md                 # Identity and authentication context
+├── HEARTBEAT.md                # Periodic check-in instructions
+└── .simpleclaw/
+    └── workspace-state.json    # Internal state tracking
+```
+
+```typescript Workspace Resolution
+// src/agents/workspace.ts
+export function resolveDefaultAgentWorkspaceDir(
+  env: NodeJS.ProcessEnv = process.env,
+  homedir: () => string = os.homedir,
+): string {
+  const home = resolveRequiredHomeDir(env, homedir);
+  const profile = env.SIMPLECLAW_PROFILE?.trim();
+  if (profile && profile.toLowerCase() !== "default") {
+    return path.join(home, ".simpleclaw", `workspace-${profile}`);
+  }
+  return path.join(home, ".simpleclaw", "workspace");
+}
+```
+</CodeGroup>
+
+## Agent Configuration
+
+### Model Settings
+
+Agents can use different models with automatic fallback:
+
+```yaml
+agents:
+  list:
+    - id: researcher
+      model:
+        primary: claude-3-7-sonnet-20250219
+        fallbacks:
+          - o1
+          - gpt-4o
+```
+
+Simplified model configuration:
+
+```yaml
+agents:
+  list:
+    - id: assistant
+      model: gpt-4o-mini  # Single string for primary only
+```
+
+<Info>
+  Model fallback automatically triggers on rate limits, authentication errors, or model unavailability.
+</Info>
+
+### Skills & Tools
+
+Control which capabilities are available to each agent:
+
+```yaml
+agents:
+  list:
+    - id: restricted
+      skills:
+        include:
+          - memory      # Only allow memory operations
+          - message     # and messaging
+        exclude:
+          - bash        # No shell access
+          - web-search  # No web searching
+```
+
+Available skills:
+- `bash` - Shell command execution
+- `web-search` - Web search via providers
+- `web-fetch` - Fetch and parse web pages
+- `memory` - Vector memory storage and retrieval
+- `message` - Cross-channel messaging
+- `sessions` - Multi-session management
+- `image` - Image generation
+- `tts` - Text-to-speech
+
+### Sandbox Configuration
+
+Isolate agent execution environments:
+
+```yaml
+agents:
+  list:
+    - id: sandboxed
+      sandbox:
+        enabled: true
+        provider: docker
+        image: simpleclaw/sandbox:latest
+        resources:
+          memory: 2g
+          cpus: 2
+```
+
+## Default Agent
+
+The **default agent** handles messages when no specific agent is bound:
+
+```yaml
+agents:
+  list:
+    - id: main
+      default: true  # This agent is the default
+      
+    - id: specialist
+      # Not default
+```
+
+If no agent has `default: true`, the **first agent** in the list becomes the default.
+
+<Note>
+  Only one agent should be marked as default. If multiple agents have `default: true`, SimpleClaw uses the first one.
+</Note>
+
+## Agent Roles
+
+Agents can be designated as orchestrators or workers:
+
+```yaml
+agents:
+  list:
+    - id: orchestrator
+      role: orchestrator
+      model: claude-3-7-sonnet-20250219
+      subagents:
+        enabled: true
+        
+    - id: worker
+      role: worker
+      model: gpt-4o-mini
+```
+
+<Accordion title="Orchestrator vs Worker">
+  - **Orchestrator** - Can spawn and coordinate subagents for complex tasks
+  - **Worker** - Executes specific tasks, typically spawned by orchestrators
+</Accordion>
+
+## Subagents
+
+Orchestrator agents can spawn specialized subagents:
+
+```yaml
+agents:
+  list:
+    - id: main
+      subagents:
+        enabled: true
+        maxDepth: 3          # Maximum nesting level
+        maxConcurrent: 5     # Max parallel subagents
+```
+
+Subagents inherit configuration from parent but run in isolated sessions:
+
+```typescript
+// Subagent session keys include depth
+// agent:main:subagent:researcher:1
+// agent:main:subagent:researcher:subagent:analyzer:2
+```
+
+## Agent Identity
+
+Customize how the agent identifies itself:
+
+```yaml
+agents:
+  list:
+    - id: support
+      identity:
+        name: "Support Assistant"
+        role: "Customer Support Specialist"
+        behavior: "Professional, helpful, and concise"
+```
+
+This information is injected into the agent's system prompt via `IDENTITY.md`.
+
+## Human Delay Simulation
+
+Make agent responses feel more natural with typing delays:
+
+```yaml
+agents:
+  list:
+    - id: main
+      humanDelay:
+        enabled: true
+        minWpm: 60       # Minimum typing speed
+        maxWpm: 120      # Maximum typing speed
+        variance: 0.2    # Randomness factor
+```
+
+## Group Chat Behavior
+
+Configure how agents behave in group conversations:
+
+```yaml
+agents:
+  list:
+    - id: main
+      groupChat:
+        autoReply: selective  # Reply when mentioned or relevant
+        minConfidence: 0.7    # Confidence threshold for unsolicited replies
+        maxBurst: 3           # Max consecutive messages
+```
+
+Options for `autoReply`:
+- `always` - Reply to every group message
+- `selective` - Reply when mentioned or high relevance
+- `mention-only` - Only reply when directly mentioned
+- `never` - Never auto-reply in groups
+
+## Memory Configuration
+
+Customize memory search behavior per agent:
+
+```yaml
+agents:
+  list:
+    - id: main
+      memorySearch:
+        enabled: true
+        provider: openai
+        minRelevance: 0.6
+        maxResults: 10
+```
+
+## Heartbeat Configuration
+
+Agents can perform periodic check-ins:
+
+```yaml
+agents:
+  list:
+    - id: main
+      heartbeat:
+        enabled: true
+        interval: 1h
+        channels:
+          - discord
+          - telegram
+        ackMaxChars: 280  # Max length for heartbeat acks
+```
+
+## Managing Agents
+
+### Via Config File
+
+Edit `~/.simpleclaw/config.yaml` and reload:
+
+```bash
+# Edit config
+vim ~/.simpleclaw/config.yaml
+
+# Reload gateway
+simpleclaw gateway reload
+```
+
+### Via CLI
+
+```bash
+# List agents
+simpleclaw agents list
+
+# Create agent
+simpleclaw agents create research --model claude-3-7-sonnet-20250219
+
+# Update agent
+simpleclaw agents update research --model gpt-4o
+
+# Delete agent
+simpleclaw agents delete research
+```
+
+### Via Gateway API
+
+```typescript
+// Create agent via WebSocket
+const result = await gateway.call("agents.create", {
+  id: "analyst",
+  model: {
+    primary: "claude-3-7-sonnet-20250219",
+    fallbacks: ["gpt-4o"]
+  },
+  workspace: "~/.simpleclaw/workspace-analyst"
+});
+```
+
+## Agent Scope Resolution
+
+The gateway resolves which agent handles a message using:
+
+```typescript
+// src/agents/agent-scope.ts
+export function resolveDefaultAgentId(cfg: SimpleClawConfig): string {
+  const agents = listAgentEntries(cfg);
+  if (agents.length === 0) {
+    return DEFAULT_AGENT_ID; // "main"
+  }
+  const defaults = agents.filter((agent) => agent?.default);
+  const chosen = (defaults[0] ?? agents[0])?.id?.trim();
+  return normalizeAgentId(chosen || DEFAULT_AGENT_ID);
+}
+```
+
+<Warning>
+  Changing an agent's `id` creates a new agent. Session history is tied to agent IDs, so renaming breaks continuity.
+</Warning>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Dedicated Workspaces" icon="folder-tree">
+    Give each agent its own workspace directory to avoid context pollution
+  </Card>
+  
+  <Card title="Appropriate Models" icon="brain">
+    Use powerful models (Claude, GPT-4) for complex agents, smaller models for simple tasks
+  </Card>
+  
+  <Card title="Skill Filtering" icon="filter">
+    Restrict capabilities based on agent purpose (e.g., disable bash for customer-facing agents)
+  </Card>
+  
+  <Card title="Descriptive IDs" icon="tag">
+    Use clear agent IDs like `support`, `research`, `creative` instead of generic names
+  </Card>
+</CardGroup>
+
+## Related Topics
+
+- [Routing](/concepts/routing) - How messages are routed to agents
+- [Sessions](/concepts/sessions) - Agent session management
+- [Models](/concepts/models) - Model provider configuration
+- [Gateway](/concepts/gateway) - Gateway architecture

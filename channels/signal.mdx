@@ -1,0 +1,476 @@
+---
+title: Signal
+description: Private messaging via signal-cli integration
+icon: message
+---
+
+SimpleClaw integrates with Signal using signal-cli, providing secure end-to-end encrypted messaging for direct messages and group chats.
+
+## Features
+
+- End-to-end encrypted messaging
+- Direct messages and group chats
+- Media support (images, videos, documents)
+- Reactions
+- Privacy-focused with no phone number disclosure
+- Message streaming with coalescing
+
+## Requirements
+
+- signal-cli installed and configured
+- Signal phone number registered with signal-cli
+- signal-cli daemon running (for real-time message reception)
+
+## Setup
+
+<Steps>
+  <Step title="Install signal-cli">
+    Install signal-cli following the [official instructions](https://github.com/AsamK/signal-cli):
+    
+    **macOS (Homebrew):**
+    ```bash
+    brew install signal-cli
+    ```
+    
+    **Linux:**
+    ```bash
+    # Download from GitHub releases
+    wget https://github.com/AsamK/signal-cli/releases/download/v0.12.0/signal-cli-0.12.0.tar.gz
+    tar xf signal-cli-0.12.0.tar.gz -C /opt
+    ln -s /opt/signal-cli-0.12.0/bin/signal-cli /usr/local/bin/
+    ```
+  </Step>
+  
+  <Step title="Register Phone Number">
+    Register your Signal phone number with signal-cli:
+    
+    ```bash
+    signal-cli -a +1234567890 register
+    signal-cli -a +1234567890 verify CODE
+    ```
+    
+    Replace `+1234567890` with your phone number in E.164 format.
+  </Step>
+  
+  <Step title="Start signal-cli Daemon">
+    Run signal-cli in daemon mode with HTTP API:
+    
+    ```bash
+    signal-cli -a +1234567890 daemon --http 127.0.0.1:8080
+    ```
+    
+    This starts an HTTP server on port 8080.
+  </Step>
+  
+  <Step title="Configure SimpleClaw">
+    ```bash
+    simpleclaw setup signal --signal-number "+1234567890" --http-url "http://localhost:8080"
+    ```
+    
+    Or configure manually:
+    ```yaml
+    channels:
+      signal:
+        enabled: true
+        account: "+1234567890"
+        httpUrl: "http://localhost:8080"
+    ```
+  </Step>
+  
+  <Step title="Verify Connection">
+    ```bash
+    simpleclaw channels status signal
+    ```
+    
+    You should see Signal listed as configured and running.
+  </Step>
+</Steps>
+
+## Configuration
+
+### Basic Configuration
+
+```yaml
+channels:
+  signal:
+    enabled: true
+    account: "+1234567890"  # Your Signal phone number
+    httpUrl: "http://localhost:8080"  # signal-cli daemon URL
+```
+
+### Alternative Configuration Options
+
+**Using HTTP host and port:**
+```yaml
+channels:
+  signal:
+    enabled: true
+    account: "+1234567890"
+    httpHost: "localhost"
+    httpPort: 8080
+```
+
+**Custom CLI path:**
+```yaml
+channels:
+  signal:
+    enabled: true
+    account: "+1234567890"
+    cliPath: "/opt/signal-cli/bin/signal-cli"
+    httpUrl: "http://localhost:8080"
+```
+
+### Multi-Account Setup
+
+Use multiple Signal accounts:
+
+```yaml
+channels:
+  signal:
+    enabled: true
+    accounts:
+      personal:
+        enabled: true
+        name: "Personal"
+        account: "+1234567890"
+        httpUrl: "http://localhost:8080"
+      work:
+        enabled: true
+        name: "Work"
+        account: "+0987654321"
+        httpUrl: "http://localhost:8081"
+```
+
+Run separate signal-cli daemons on different ports.
+
+## Security
+
+### DM Policy
+
+```yaml
+channels:
+  signal:
+    dmPolicy: pairing  # Options: open, pairing, allowlist, off
+    allowFrom:
+      - "+1234567890"  # E.164 format phone numbers
+      - "*"  # Allow all (not recommended)
+```
+
+### Group Policy
+
+```yaml
+channels:
+  signal:
+    groupPolicy: allowlist  # Options: allowlist, open, off
+    groupAllowFrom:
+      - "+1234567890"  # Restrict who can trigger in groups
+```
+
+### Pairing Workflow
+
+With `dmPolicy: pairing`, users must be approved:
+
+1. User sends first message
+2. You receive pairing request
+3. Approve: `simpleclaw pairing approve signal +1234567890`
+4. User receives approval notification
+
+## Message Features
+
+### Sending Messages
+
+```bash
+# Send text message
+simpleclaw message send signal +1234567890 "Hello!"
+
+# Send with media
+simpleclaw message send signal +1234567890 "Photo" --media-url "/path/to/image.jpg"
+
+# Send to group
+simpleclaw message send signal "group:base64-group-id" "Group message"
+
+# UUID format (alternative to phone number)
+simpleclaw message send signal "uuid:12345678-1234-1234-1234-123456789abc" "Hello!"
+```
+
+### Target Formats
+
+- Phone number: `+1234567890` (E.164 format)
+- UUID: `uuid:12345678-1234-1234-1234-123456789abc`
+- Group: `group:base64-encoded-group-id`
+- Signal prefix: `signal:+1234567890` or `signal:group:...`
+
+### Reactions
+
+React to messages:
+
+```yaml
+channels:
+  signal:
+    # Reactions supported by default
+```
+
+### Media Support
+
+```yaml
+channels:
+  signal:
+    mediaMaxMb: 100  # Maximum media file size
+```
+
+### Message Streaming
+
+Signal supports message streaming with coalescing:
+
+```yaml
+channels:
+  signal:
+    # Streaming enabled by default
+    # Default coalesce: minChars=1500, idleMs=1000
+```
+
+## Group Management
+
+### Creating Groups
+
+Create groups using signal-cli:
+
+```bash
+signal-cli -a +1234567890 updateGroup -n "Group Name" -m +0987654321 +1122334455
+```
+
+### Getting Group IDs
+
+List groups:
+
+```bash
+signal-cli -a +1234567890 listGroups -d
+```
+
+Copy the base64-encoded group ID.
+
+### Group Configuration
+
+Currently, Signal groups use the account-level `groupPolicy` setting. Per-group configuration is not yet supported in the channel plugin.
+
+## Advanced Configuration
+
+### Custom signal-cli Path
+
+```yaml
+channels:
+  signal:
+    cliPath: "/custom/path/to/signal-cli"
+```
+
+### Media File Limits
+
+```yaml
+channels:
+  signal:
+    mediaMaxMb: 50  # Limit media uploads
+```
+
+### Default Recipient
+
+```yaml
+channels:
+  signal:
+    defaultTo: "+1234567890"  # Default outbound recipient
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="signal-cli Not Found">
+    Ensure signal-cli is installed and in PATH:
+    
+    ```bash
+    which signal-cli
+    signal-cli --version
+    ```
+    
+    If using custom path, set `cliPath` in config.
+  </Accordion>
+  
+  <Accordion title="Daemon Not Running">
+    Verify signal-cli daemon is running:
+    
+    ```bash
+    curl http://localhost:8080/v1/about
+    ```
+    
+    Start daemon if needed:
+    ```bash
+    signal-cli -a +1234567890 daemon --http 127.0.0.1:8080
+    ```
+  </Accordion>
+  
+  <Accordion title="Messages Not Received">
+    Check SimpleClaw can reach signal-cli daemon:
+    
+    ```bash
+    simpleclaw channels status signal --probe
+    ```
+    
+    Verify `httpUrl` in config matches daemon address.
+  </Accordion>
+  
+  <Accordion title="Phone Number Format">
+    Use E.164 format (international format with country code):
+    - Correct: `+1234567890`
+    - Incorrect: `1234567890`, `(123) 456-7890`
+  </Accordion>
+  
+  <Accordion title="Group Messages Not Working">
+    Ensure bot account is a member of the group.
+    
+    Group IDs must be in base64 format, not human-readable names.
+  </Accordion>
+</AccordionGroup>
+
+## CLI Commands
+
+```bash
+# Setup
+simpleclaw setup signal --signal-number "+1234567890" --http-url "http://localhost:8080"
+
+# Status
+simpleclaw channels status signal
+simpleclaw channels status signal --probe
+
+# Send message
+simpleclaw message send signal <number> <message>
+
+# Pairing
+simpleclaw pairing approve signal +1234567890
+simpleclaw pairing list signal
+```
+
+## Running signal-cli as a Service
+
+### systemd (Linux)
+
+Create `/etc/systemd/system/signal-cli.service`:
+
+```ini
+[Unit]
+Description=signal-cli daemon
+After=network.target
+
+[Service]
+Type=simple
+User=your-user
+ExecStart=/usr/local/bin/signal-cli -a +1234567890 daemon --http 127.0.0.1:8080
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl enable signal-cli
+sudo systemctl start signal-cli
+```
+
+### launchd (macOS)
+
+Create `~/Library/LaunchAgents/com.signal-cli.daemon.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.signal-cli.daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/signal-cli</string>
+        <string>-a</string>
+        <string>+1234567890</string>
+        <string>daemon</string>
+        <string>--http</string>
+        <string>127.0.0.1:8080</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
+```
+
+Load:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.signal-cli.daemon.plist
+```
+
+## API Reference
+
+Signal channel implementation: `extensions/signal/src/channel.ts`
+
+### Channel ID
+
+`signal`
+
+### Target ID Format
+
+- Phone: `+1234567890` (E.164)
+- UUID: `uuid:12345678-1234-1234-1234-123456789abc`
+- Group: `group:base64-id` or `signal:group:base64-id`
+
+### Capabilities
+
+- Chat types: `direct`, `group`
+- Features: `media`, `reactions`
+- Delivery mode: `direct`
+- Text chunk limit: 4000 characters
+- Streaming: Supported with coalescing (minChars: 1500, idleMs: 1000)
+
+### Configuration Schema
+
+See `SignalConfigSchema` in source for full schema.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Pairing Mode" icon="handshake">
+    Enable pairing to control access:
+    ```yaml
+    dmPolicy: pairing
+    ```
+  </Card>
+  
+  <Card title="Run Daemon as Service" icon="server">
+    Use systemd/launchd for automatic startup and restarts
+  </Card>
+  
+  <Card title="E.164 Phone Format" icon="phone">
+    Always use international format:
+    ```
+    +1234567890
+    ```
+  </Card>
+  
+  <Card title="Limit Media Size" icon="file-image">
+    Prevent large uploads:
+    ```yaml
+    mediaMaxMb: 50
+    ```
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="signal-cli Documentation" icon="book" href="https://github.com/AsamK/signal-cli">
+    Learn more about signal-cli
+  </Card>
+  <Card title="Security Configuration" icon="shield" href="/security">
+    Configure DM policies and allowlists
+  </Card>
+</CardGroup>

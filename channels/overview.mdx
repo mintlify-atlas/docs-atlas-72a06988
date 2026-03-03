@@ -1,0 +1,145 @@
+---
+title: Messaging Channels
+description: Connect SimpleClaw to your favorite messaging platforms
+---
+
+SimpleClaw supports a wide range of messaging platforms, allowing you to chat with your AI assistant from any channel you prefer.
+
+## Core Channels
+
+<CardGroup cols={2}>
+  <Card title="WhatsApp" icon="whatsapp" href="/channels/whatsapp">
+    Connect via WhatsApp Web with QR code authentication
+  </Card>
+  <Card title="Telegram" icon="telegram" href="/channels/telegram">
+    Integrate using Telegram bot tokens with full bot API support
+  </Card>
+  <Card title="Discord" icon="discord" href="/channels/discord">
+    Deploy as a Discord bot with server and channel support
+  </Card>
+  <Card title="Slack" icon="slack" href="/channels/slack">
+    Add to Slack workspaces with Socket Mode integration
+  </Card>
+  <Card title="Signal" icon="message" href="/channels/signal">
+    Private messaging via signal-cli integration
+  </Card>
+  <Card title="iMessage" icon="apple" href="/channels/imessage">
+    Native Apple Messages support on macOS
+  </Card>
+</CardGroup>
+
+## Channel Capabilities
+
+| Channel | Direct Messages | Group Chats | Threads | Media | Polls | Reactions |
+|---------|----------------|-------------|---------|-------|-------|----------|
+| WhatsApp | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| Telegram | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Discord | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Slack | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| Signal | ✓ | ✓ | — | ✓ | — | ✓ |
+| iMessage | ✓ | ✓ | — | ✓ | — | — |
+
+## Extension Channels
+
+Additional messaging platforms are available as extensions. [Learn more about extension channels](/channels/more).
+
+<CardGroup cols={3}>
+  <Card title="Matrix" icon="matrix">
+    Decentralized chat protocol
+  </Card>
+  <Card title="Microsoft Teams" icon="microsoft">
+    Enterprise collaboration platform
+  </Card>
+  <Card title="Google Chat" icon="google">
+    Google Workspace messaging
+  </Card>
+  <Card title="Mattermost" icon="comments">
+    Open-source team communication
+  </Card>
+  <Card title="IRC" icon="hashtag">
+    Classic internet relay chat
+  </Card>
+  <Card title="LINE" icon="message">
+    Popular messaging app in Asia
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+<Steps>
+  <Step title="Choose Your Channel">
+    Select the messaging platform you want to connect. Each channel has different setup requirements.
+  </Step>
+  <Step title="Configure Authentication">
+    Follow the channel-specific setup guide to obtain necessary credentials (bot tokens, API keys, etc.).
+  </Step>
+  <Step title="Test Connection">
+    Use `simpleclaw channels status` to verify your channel is configured correctly.
+  </Step>
+  <Step title="Set Security Policies">
+    Configure DM policies and allowlists to control who can interact with your assistant.
+  </Step>
+</Steps>
+
+## Multi-Channel Support
+
+You can connect multiple channels simultaneously. SimpleClaw will route messages from all configured channels to your AI assistant.
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    botToken: "your-telegram-token"
+  
+  discord:
+    enabled: true
+    token: "your-discord-token"
+  
+  signal:
+    enabled: true
+    httpUrl: "http://localhost:8080"
+```
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="DM Policy Configuration">
+    Set `dmPolicy` to `pairing` or `allowlist` to control who can send direct messages to your assistant.
+    
+    ```yaml
+    channels:
+      telegram:
+        dmPolicy: pairing  # Users must be approved first
+        allowFrom:
+          - "123456789"  # Trusted user IDs
+    ```
+  </Accordion>
+  
+  <Accordion title="Group Policy Settings">
+    Use `groupPolicy` to control behavior in group chats:
+    - `allowlist`: Only specified groups can trigger the bot
+    - `open`: Any group can trigger (mention-gated)
+    - `off`: Disable group functionality
+  </Accordion>
+  
+  <Accordion title="Credential Storage">
+    Store sensitive tokens in environment variables or separate files:
+    
+    ```yaml
+    channels:
+      telegram:
+        tokenFile: "/path/to/telegram-token.txt"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration Reference" icon="gear" href="/configuration">
+    Detailed configuration options for all channels
+  </Card>
+  <Card title="Security Policies" icon="shield" href="/security">
+    Learn about DM policies, allowlists, and pairing
+  </Card>
+</CardGroup>

@@ -1,0 +1,228 @@
+---
+title: "Agent CLI"
+description: "Run agent turns and manage isolated agents"
+---
+
+The `agent` command runs an agent turn via the Gateway, and the `agents` command manages isolated agents with their own workspaces, authentication, and routing.
+
+## agent
+
+Run an agent turn via the Gateway (use `--local` for embedded execution).
+
+```bash
+simpleclaw agent --message <text>
+```
+
+<ParamField path="--message" type="string" required>
+  Message body for the agent
+</ParamField>
+
+<ParamField path="--to" type="string">
+  Recipient number in E.164 format used to derive the session key
+</ParamField>
+
+<ParamField path="--session-id" type="string">
+  Use an explicit session id
+</ParamField>
+
+<ParamField path="--agent" type="string">
+  Agent id (overrides routing bindings)
+</ParamField>
+
+<ParamField path="--thinking" type="string">
+  Thinking level: `off`, `minimal`, `low`, `medium`, or `high`
+</ParamField>
+
+<ParamField path="--verbose" type="string">
+  Persist agent verbose level for the session: `on` or `off`
+</ParamField>
+
+<ParamField path="--channel" type="string">
+  Delivery channel (omit to use the main session channel)
+</ParamField>
+
+<ParamField path="--reply-to" type="string">
+  Delivery target override (separate from session routing)
+</ParamField>
+
+<ParamField path="--reply-channel" type="string">
+  Delivery channel override (separate from routing)
+</ParamField>
+
+<ParamField path="--reply-account" type="string">
+  Delivery account id override
+</ParamField>
+
+<ParamField path="--local" type="boolean">
+  Run the embedded agent locally (requires model provider API keys in your shell)
+</ParamField>
+
+<ParamField path="--deliver" type="boolean">
+  Send the agent's reply back to the selected channel
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output result as JSON
+</ParamField>
+
+<ParamField path="--timeout" type="number">
+  Override agent command timeout in seconds (default: 600 or config value)
+</ParamField>
+
+### Examples
+
+```bash
+# Start a new session
+simpleclaw agent --to +15555550123 --message "status update"
+
+# Use a specific agent
+simpleclaw agent --agent ops --message "Summarize logs"
+
+# Target a session with explicit thinking level
+simpleclaw agent --session-id 1234 --message "Summarize inbox" --thinking medium
+
+# Enable verbose logging and JSON output
+simpleclaw agent --to +15555550123 --message "Trace logs" --verbose on --json
+
+# Deliver reply
+simpleclaw agent --to +15555550123 --message "Summon reply" --deliver
+
+# Send reply to a different channel/target
+simpleclaw agent --agent ops --message "Generate report" --deliver --reply-channel slack --reply-to "#reports"
+```
+
+## agents
+
+Manage isolated agents (workspaces, auth, and routing).
+
+### agents list
+
+List configured agents.
+
+```bash
+simpleclaw agents list
+```
+
+<ParamField path="--json" type="boolean">
+  Output JSON instead of text
+</ParamField>
+
+<ParamField path="--bindings" type="boolean">
+  Include routing bindings
+</ParamField>
+
+### agents add
+
+Add a new isolated agent.
+
+```bash
+simpleclaw agents add [name]
+```
+
+<ParamField path="name" type="string">
+  Agent name (optional positional argument)
+</ParamField>
+
+<ParamField path="--workspace" type="string">
+  Workspace directory for the new agent
+</ParamField>
+
+<ParamField path="--model" type="string">
+  Model id for this agent
+</ParamField>
+
+<ParamField path="--agent-dir" type="string">
+  Agent state directory for this agent
+</ParamField>
+
+<ParamField path="--bind" type="string">
+  Route channel binding (repeatable): `channel[:accountId]`
+</ParamField>
+
+<ParamField path="--non-interactive" type="boolean">
+  Disable prompts; requires `--workspace`
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON summary
+</ParamField>
+
+### agents set-identity
+
+Update an agent identity (name, theme, emoji, avatar).
+
+```bash
+simpleclaw agents set-identity
+```
+
+<ParamField path="--agent" type="string">
+  Agent id to update
+</ParamField>
+
+<ParamField path="--workspace" type="string">
+  Workspace directory used to locate the agent and `IDENTITY.md`
+</ParamField>
+
+<ParamField path="--identity-file" type="string">
+  Explicit `IDENTITY.md` path to read
+</ParamField>
+
+<ParamField path="--from-identity" type="boolean">
+  Read values from `IDENTITY.md`
+</ParamField>
+
+<ParamField path="--name" type="string">
+  Identity name
+</ParamField>
+
+<ParamField path="--theme" type="string">
+  Identity theme
+</ParamField>
+
+<ParamField path="--emoji" type="string">
+  Identity emoji
+</ParamField>
+
+<ParamField path="--avatar" type="string">
+  Identity avatar (workspace path, http(s) URL, or data URI)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON summary
+</ParamField>
+
+**Examples:**
+
+```bash
+# Set name and emoji
+simpleclaw agents set-identity --agent main --name "SimpleClaw" --emoji "🦞"
+
+# Set avatar path
+simpleclaw agents set-identity --agent main --avatar avatars/simpleclaw.png
+
+# Load from IDENTITY.md
+simpleclaw agents set-identity --workspace ~/.simpleclaw/workspace --from-identity
+
+# Use a specific IDENTITY.md
+simpleclaw agents set-identity --identity-file ~/.simpleclaw/workspace/IDENTITY.md --agent main
+```
+
+### agents delete
+
+Delete an agent and prune workspace/state.
+
+```bash
+simpleclaw agents delete <id>
+```
+
+<ParamField path="id" type="string" required>
+  Agent id to delete
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Skip confirmation
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON summary
+</ParamField>

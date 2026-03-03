@@ -1,0 +1,194 @@
+---
+title: Security Overview
+summary: SimpleClaw's security model and trust boundaries for personal AI assistant deployments
+---
+
+# Security Overview
+
+SimpleClaw implements a **personal assistant security model** designed for single-user deployments with explicit trust boundaries.
+
+## Core Security Model
+
+### Personal Assistant Trust Model
+
+SimpleClaw assumes one trusted operator boundary per gateway instance:
+
+- **Supported**: One user/trust boundary per gateway (one OS user/host/VPS per boundary)
+- **Not supported**: Multiple adversarial users sharing one gateway/agent
+- **Isolation requirement**: If you need mixed-trust operation, split trust boundaries with separate gateways and credentials
+
+### Trust Boundary Principles
+
+1. **Gateway**: Control plane with authentication (`gateway.auth`), tool policy, and routing
+2. **Node**: Remote execution surface paired to the Gateway for device actions
+3. **Operator boundary**: Anyone who can modify `~/.openclaw` config/state is a trusted operator
+4. **Session keys**: Routing controls, not per-user authorization boundaries
+
+## Deployment Assumptions
+
+SimpleClaw security guidance assumes:
+
+- The host where SimpleClaw runs is within a trusted OS/admin boundary
+- Anyone who can modify `~/.openclaw` state/config is a trusted operator
+- A single Gateway shared by mutually untrusted people is **not a recommended setup**
+- Authenticated Gateway callers are treated as trusted operators
+- Multiple gateway instances can run on one machine, but clean per-user isolation is recommended
+
+### Recommended Deployment Model
+
+- One user per machine/host (or VPS)
+- One gateway for that user
+- One or more agents inside that gateway
+- For multiple users: use one VPS/host per user
+
+## Security Audit Tool
+
+Run regular security audits to identify configuration issues:
+
+```bash
+simpleclaw security audit
+simpleclaw security audit --deep
+simpleclaw security audit --fix
+simpleclaw security audit --json
+```
+
+The audit tool flags:
+
+- Gateway auth exposure
+- Browser control exposure
+- Elevated allowlists
+- Filesystem permissions issues
+- Dangerous configuration flags
+- Channel security misconfigurations
+
+## Security Layers
+
+SimpleClaw implements multiple security layers:
+
+### 1. Access Control
+
+- **DM pairing**: Explicit approval required for new senders to message your assistant
+- **Allowlists**: Configurable per-channel allowlists for authorized senders
+- **Group policies**: Separate controls for group vs. direct message access
+
+### 2. Authentication
+
+- **Gateway auth**: Token or password authentication for gateway API access
+- **Device pairing**: Explicit approval for nodes (iOS/Android/remote devices) joining the gateway
+- **Channel credentials**: Stored securely in `~/.openclaw/credentials/`
+
+### 3. Execution Controls
+
+- **Sandbox mode**: Optional sandboxed execution for agent tools (`non-main`, `all`)
+- **Exec approvals**: Allowlist or ask-UI approval for command execution
+- **Tool policy**: Per-tool enable/disable controls
+- **Workspace-only mode**: Restrict filesystem tools to workspace directory
+
+### 4. Network & Exposure
+
+- **Loopback-only default**: Gateway binds to `127.0.0.1` by default
+- **LAN/Tailscale options**: Explicit configuration required for network access
+- **TLS support**: Optional TLS for encrypted gateway connections
+
+## Runtime Requirements
+
+### Node.js Version
+
+SimpleClaw requires **Node.js 22.12.0 or later** (LTS) for critical security patches:
+
+- CVE-2025-59466: async_hooks DoS vulnerability
+- CVE-2026-21636: Permission model bypass vulnerability
+
+Verify your Node.js version:
+
+```bash
+node --version  # Should be v22.12.0 or later
+```
+
+### Docker Security
+
+When running SimpleClaw in Docker:
+
+1. Official image runs as non-root user (`node`)
+2. Use `--read-only` flag for additional filesystem protection
+3. Limit container capabilities with `--cap-drop=ALL`
+
+Example secure Docker run:
+
+```bash
+docker run --read-only --cap-drop=ALL \
+  -v simpleclaw-data:/app/data \
+  simpleclaw/simpleclaw:latest
+```
+
+## Not Vulnerabilities by Design
+
+The following patterns are **expected behavior** in SimpleClaw's trust model:
+
+- Prompt injection without policy/auth/sandbox bypass
+- Operator-intended local features (e.g., TUI local `!` shell)
+- Authorized user-triggered local actions (e.g., `/export-session` writing to host path)
+- Malicious plugin behavior after trusted operator installation
+- Per-user multi-tenant authorization on shared gateway (not supported)
+- Localhost-only deployment findings (e.g., missing HSTS on loopback)
+
+## Agent and Model Assumptions
+
+- The model/agent is **not** a trusted principal
+- Assume prompt/content injection can manipulate model behavior
+- Security boundaries come from:
+  - Host/config trust
+  - Authentication
+  - Tool policy
+  - Sandboxing
+  - Exec approvals
+
+## Hardening Recommendations
+
+### Minimal Tool Surface
+
+```json5
+{
+  "tools": {
+    "exec": { "enabled": false },
+    "browser": { "enabled": false },
+    "http": { "enabled": false },
+    "fs": { "workspaceOnly": true }
+  }
+}
+```
+
+### Filesystem Hardening
+
+- `tools.exec.applyPatch.workspaceOnly: true` (recommended): Restricts `apply_patch` to workspace
+- `tools.fs.workspaceOnly: true` (optional): Restricts all filesystem tools to workspace
+
+### Gateway Network Safety
+
+- Keep gateway **loopback-only**: `gateway.bind="loopback"` (default)
+- For remote access: Use SSH tunnel or Tailscale serve/funnel
+- **Never expose to public internet** without strong authentication
+
+## Workspace Memory Trust Boundary
+
+`MEMORY.md` and `memory/*.md` are treated as trusted local operator state:
+
+- If someone can edit workspace memory files, they've already crossed the operator boundary
+- Memory search/indexing over these files is expected behavior
+- For untrusted-user isolation, split by OS user/host with separate gateways
+
+## Plugin Trust Boundary
+
+Plugins are loaded **in-process** with the Gateway:
+
+- Plugins execute with the same OS privileges as the SimpleClaw process
+- Only install plugins you trust
+- Prefer `plugins.allow` to pin explicit trusted plugin IDs
+- Installing/enabling a plugin grants it the same trust level as local Gateway code
+
+## Related Documentation
+
+- [DM Pairing System](/security/pairing)
+- [Allowlist Configuration](/security/allowlists)
+- [Security Policy (GitHub)](https://github.com/simpleclaw/simpleclaw/blob/main/SECURITY.md)
+- [Reporting Vulnerabilities](mailto:security@simpleclaw.ai)

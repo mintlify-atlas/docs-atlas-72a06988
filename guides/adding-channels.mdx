@@ -1,0 +1,436 @@
+---
+title: "Adding Channels"
+description: "Connect SimpleClaw to messaging platforms like WhatsApp, Telegram, Discord, and Slack"
+---
+
+# Adding Channels
+
+Connect SimpleClaw to your favorite messaging platforms to interact with your agent from anywhere.
+
+## Supported Channels
+
+SimpleClaw supports these messaging platforms:
+
+- **WhatsApp** (via Baileys)
+- **Telegram** (via grammY)
+- **Discord** (via discord.js)
+- **Slack** (via Bolt)
+- **Google Chat** (Chat API)
+- **Signal** (signal-cli)
+- **BlueBubbles** (iMessage, recommended)
+- **iMessage** (legacy macOS)
+- **Microsoft Teams** (extension)
+- **Matrix** (extension)
+- **WebChat** (built-in web UI)
+
+## Quick Setup Wizard
+
+The easiest way to add channels is using the onboarding wizard:
+
+```bash
+simpleclaw onboard --channels
+```
+
+The wizard will guide you through:
+1. Selecting channels to enable
+2. Providing credentials (API keys, bot tokens)
+3. Configuring access control (allowlists, DM policies)
+4. Testing channel connections
+
+## Manual Channel Setup
+
+### WhatsApp
+
+<Steps>
+  <Step title="Enable WhatsApp Channel">
+    ```bash
+    simpleclaw config set channels.whatsapp.enabled true --json
+    ```
+  </Step>
+
+  <Step title="Link Your Device">
+    ```bash
+    simpleclaw channels login --channel whatsapp
+    ```
+
+    A QR code will appear. Scan it with WhatsApp:
+    1. Open WhatsApp on your phone
+    2. Tap **Menu** or **Settings** → **Linked Devices**
+    3. Tap **Link a Device**
+    4. Scan the QR code
+  </Step>
+
+  <Step title="Configure Allowlist">
+    Only allow specific contacts to message the agent:
+
+    ```bash
+    simpleclaw config set channels.whatsapp.allowFrom '["<phone-number>"]' --json
+    ```
+
+    Example:
+    ```bash
+    simpleclaw config set channels.whatsapp.allowFrom '["+15551234567"]' --json
+    ```
+  </Step>
+
+  <Step title="Test Connection">
+    ```bash
+    simpleclaw channels status --probe
+    ```
+
+    Send yourself a message on WhatsApp:
+    ```
+    Hello SimpleClaw!
+    ```
+  </Step>
+</Steps>
+
+### Telegram
+
+<Steps>
+  <Step title="Create a Bot">
+    1. Open Telegram and message [@BotFather](https://t.me/BotFather)
+    2. Send `/newbot`
+    3. Follow the prompts to choose a name and username
+    4. Copy the bot token (looks like `123456:ABC-DEF1234`)
+  </Step>
+
+  <Step title="Configure Bot Token">
+    Set the token in your config:
+
+    ```bash
+    simpleclaw config set channels.telegram.botToken '"YOUR_BOT_TOKEN"' --json
+    simpleclaw config set channels.telegram.enabled true --json
+    ```
+
+    Or use environment variable:
+    ```bash
+    export TELEGRAM_BOT_TOKEN="123456:ABC-DEF1234"
+    ```
+  </Step>
+
+  <Step title="Configure Allowlist (Optional)">
+    Restrict who can message your bot:
+
+    ```bash
+    simpleclaw config set channels.telegram.allowFrom '["@username"]' --json
+    ```
+  </Step>
+
+  <Step title="Test Your Bot">
+    1. Find your bot in Telegram
+    2. Send `/start`
+    3. Send a message: "Hello!"
+  </Step>
+</Steps>
+
+### Discord
+
+<Steps>
+  <Step title="Create Discord Application">
+    1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+    2. Click **New Application**
+    3. Name it (e.g., "SimpleClaw")
+    4. Go to **Bot** tab
+    5. Click **Add Bot**
+  </Step>
+
+  <Step title="Enable Privileged Intents">
+    On the **Bot** page, enable:
+    - **Message Content Intent** (required)
+    - **Server Members Intent** (recommended)
+  </Step>
+
+  <Step title="Get Bot Token">
+    Click **Reset Token** and copy the token.
+
+    Set it in config:
+    ```bash
+    simpleclaw config set channels.discord.token '"YOUR_BOT_TOKEN"' --json
+    simpleclaw config set channels.discord.enabled true --json
+    ```
+  </Step>
+
+  <Step title="Add Bot to Server">
+    1. Go to **OAuth2** → **URL Generator**
+    2. Select scopes: `bot`, `applications.commands`
+    3. Select bot permissions:
+       - View Channels
+       - Send Messages
+       - Read Message History
+       - Embed Links
+       - Attach Files
+    4. Copy the generated URL and open it in your browser
+    5. Select your server and authorize
+  </Step>
+
+  <Step title="Configure DM Policy">
+    Discord DMs default to pairing mode. To allow open DMs:
+
+    ```bash
+    simpleclaw config set channels.discord.dmPolicy '"open"' --json
+    simpleclaw config set channels.discord.allowFrom '["*"]' --json
+    ```
+
+    Or keep pairing mode (recommended):
+    ```bash
+    simpleclaw config set channels.discord.dmPolicy '"pairing"' --json
+    ```
+  </Step>
+</Steps>
+
+### Slack
+
+<Steps>
+  <Step title="Create Slack App">
+    1. Go to [Slack API Apps](https://api.slack.com/apps)
+    2. Click **Create New App** → **From scratch**
+    3. Name your app and select your workspace
+  </Step>
+
+  <Step title="Add Bot Scopes">
+    Go to **OAuth & Permissions** and add these scopes:
+    - `app_mentions:read`
+    - `chat:write`
+    - `channels:history`
+    - `groups:history`
+    - `im:history`
+    - `files:write`
+  </Step>
+
+  <Step title="Enable Socket Mode">
+    1. Go to **Socket Mode** and enable it
+    2. Generate an app-level token with `connections:write` scope
+    3. Copy the token (starts with `xapp-`)
+  </Step>
+
+  <Step title="Install to Workspace">
+    1. Go to **Install App**
+    2. Click **Install to Workspace**
+    3. Authorize the app
+    4. Copy the **Bot User OAuth Token** (starts with `xoxb-`)
+  </Step>
+
+  <Step title="Configure Tokens">
+    ```bash
+    export SLACK_BOT_TOKEN="xoxb-your-bot-token"
+    export SLACK_APP_TOKEN="xapp-your-app-token"
+    ```
+
+    Or in config:
+    ```bash
+    simpleclaw config set channels.slack.botToken '"xoxb-..."' --json
+    simpleclaw config set channels.slack.appToken '"xapp-..."' --json
+    simpleclaw config set channels.slack.enabled true --json
+    ```
+  </Step>
+</Steps>
+
+## Channel Configuration Reference
+
+### Common Options
+
+All channels support these config options:
+
+```json
+{
+  "channels": {
+    "<channel-id>": {
+      "enabled": true,
+      "allowFrom": ["user-id-1", "user-id-2"],
+      "dmPolicy": "pairing",  // or "open", "blocked"
+      "groups": {
+        "group-id-1": {
+          "requireMention": true
+        },
+        "*": {
+          "requireMention": false
+        }
+      }
+    }
+  }
+}
+```
+
+### DM Policies
+
+<ParamField path="dmPolicy" type="string" default="pairing">
+  How to handle direct messages from unknown senders:
+  
+  - `pairing` - Require pairing code approval (recommended)
+  - `open` - Allow anyone to message (requires `"*"` in allowFrom)
+  - `blocked` - Reject all DMs from non-allowlisted senders
+</ParamField>
+
+### Group Configuration
+
+<ParamField path="groups" type="object">
+  Configure group chat behavior:
+  
+  ```json
+  {
+    "groups": {
+      "specific-group-id": {
+        "requireMention": true,
+        "allowUnmentionedTools": false
+      },
+      "*": {
+        "requireMention": false
+      }
+    }
+  }
+  ```
+  
+  Use `"*"` as a wildcard to allow all groups.
+</ParamField>
+
+## Channel Status
+
+Check the health of all channels:
+
+```bash
+simpleclaw channels status
+```
+
+With active probing:
+```bash
+simpleclaw channels status --probe
+```
+
+Example output:
+```
+┌─ Channels Status ────────────────────────────────────┐
+│ WhatsApp     ✓ Connected                              │
+│ Telegram     ✓ Connected (@your_bot)                  │
+│ Discord      ✓ Connected (2 servers)                 │
+│ Slack        ✗ Not configured                         │
+└──────────────────────────────────────────────────┘
+```
+
+## Pairing Flow (DM Access)
+
+When using `dmPolicy: "pairing"`, unknown senders receive a pairing code:
+
+<Steps>
+  <Step title="User Sends First Message">
+    Unknown user sends a DM:
+    ```
+    Hello!
+    ```
+  </Step>
+
+  <Step title="Bot Responds with Pairing Code">
+    ```
+    Your pairing code: ABC-123
+
+    To approve: simpleclaw pairing approve <channel> ABC-123
+    ```
+  </Step>
+
+  <Step title="Admin Approves Pairing">
+    On the machine running SimpleClaw:
+    ```bash
+    simpleclaw pairing approve telegram ABC-123
+    ```
+  </Step>
+
+  <Step title="User Can Now Chat">
+    The user is added to the allowlist and can now message the agent.
+  </Step>
+</Steps>
+
+## Multi-Account Setup
+
+Some channels support multiple accounts:
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "accounts": {
+        "work": {
+          "botToken": "123456:WORK_TOKEN",
+          "allowFrom": ["@work_team"]
+        },
+        "personal": {
+          "botToken": "789012:PERSONAL_TOKEN",
+          "allowFrom": ["@family"]
+        }
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Channel not connecting">
+    1. Verify credentials are correct:
+       ```bash
+       simpleclaw config get channels.<channel-id>
+       ```
+
+    2. Check Gateway logs:
+       ```bash
+       simpleclaw gateway logs --tail 50
+       ```
+
+    3. Restart the Gateway:
+       ```bash
+       simpleclaw gateway restart
+       ```
+  </Accordion>
+
+  <Accordion title="Messages not being received">
+    1. Check allowlist configuration:
+       ```bash
+       simpleclaw config get channels.<channel-id>.allowFrom
+       ```
+
+    2. Verify DM policy:
+       ```bash
+       simpleclaw config get channels.<channel-id>.dmPolicy
+       ```
+
+    3. Check channel status:
+       ```bash
+       simpleclaw channels status --probe
+       ```
+  </Accordion>
+
+  <Accordion title="Bot not responding in groups">
+    1. Verify group is in allowlist:
+       ```json
+       {
+         "groups": {
+           "group-id": { "requireMention": true },
+           "*": { "requireMention": false }
+         }
+       }
+       ```
+
+    2. Check if mention is required:
+       - Discord: `@BotName message`
+       - Telegram: `@bot_username message`
+       - Slack: `@BotName message`
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multi-Agent Setup" icon="users" href="/guides/multi-agent-setup">
+    Route different channels to specialized agents
+  </Card>
+  <Card title="Custom Skills" icon="puzzle-piece" href="/guides/custom-skills">
+    Add custom tools and capabilities
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Trigger agent runs from external events
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/guides/troubleshooting">
+    Common issues and solutions
+  </Card>
+</CardGroup>

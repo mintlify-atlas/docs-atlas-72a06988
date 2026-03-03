@@ -1,0 +1,421 @@
+---
+title: Slack
+description: Add SimpleClaw to Slack workspaces with Socket Mode integration
+icon: slack
+---
+
+SimpleClaw integrates with Slack using Socket Mode, providing real-time bot functionality in workspaces, channels, threads, and direct messages.
+
+## Features
+
+- Direct messages and channel support
+- Thread conversations
+- Media attachments
+- Reactions and interactive components
+- Slash commands
+- Message streaming with coalescing
+- Socket Mode for firewall-friendly operation
+
+## Setup
+
+<Steps>
+  <Step title="Create Slack App">
+    1. Go to [Slack API Apps](https://api.slack.com/apps)
+    2. Click "Create New App" → "From scratch"
+    3. Enter app name and select workspace
+    4. Click "Create App"
+  </Step>
+  
+  <Step title="Enable Socket Mode">
+    1. In app settings, go to "Socket Mode"
+    2. Enable Socket Mode
+    3. Generate an app-level token with `connections:write` scope
+    4. Copy the app token (starts with `xapp-`)
+  </Step>
+  
+  <Step title="Configure Bot Token">
+    1. Go to "OAuth & Permissions"
+    2. Add bot token scopes:
+       - `app_mentions:read`
+       - `chat:write`
+       - `channels:history`
+       - `channels:read`
+       - `groups:history`
+       - `groups:read`
+       - `im:history`
+       - `im:read`
+       - `im:write`
+       - `mpim:history`
+       - `mpim:read`
+       - `reactions:write`
+       - `files:write`
+    3. Install app to workspace
+    4. Copy the bot token (starts with `xoxb-`)
+  </Step>
+  
+  <Step title="Enable Event Subscriptions">
+    1. Go to "Event Subscriptions"
+    2. Enable Events
+    3. Subscribe to bot events:
+       - `app_mention`
+       - `message.channels`
+       - `message.groups`
+       - `message.im`
+       - `message.mpim`
+  </Step>
+  
+  <Step title="Configure SimpleClaw">
+    ```bash
+    simpleclaw setup slack --bot-token "xoxb-..." --app-token "xapp-..."
+    ```
+    
+    Or use environment variables:
+    ```bash
+    export SLACK_BOT_TOKEN="xoxb-..."
+    export SLACK_APP_TOKEN="xapp-..."
+    simpleclaw setup slack --use-env
+    ```
+  </Step>
+  
+  <Step title="Verify Connection">
+    ```bash
+    simpleclaw channels status slack
+    ```
+    
+    You should see the bot connected and running.
+  </Step>
+</Steps>
+
+## Configuration
+
+### Basic Configuration
+
+```yaml
+channels:
+  slack:
+    enabled: true
+    botToken: "xoxb-your-bot-token"
+    appToken: "xapp-your-app-token"
+```
+
+### Environment Variables
+
+```bash
+export SLACK_BOT_TOKEN="xoxb-..."
+export SLACK_APP_TOKEN="xapp-..."
+```
+
+```yaml
+channels:
+  slack:
+    enabled: true
+    # Tokens loaded from environment
+```
+
+### Multi-Account Setup
+
+Connect to multiple Slack workspaces:
+
+```yaml
+channels:
+  slack:
+    enabled: true
+    accounts:
+      main:
+        enabled: true
+        name: "Main Workspace"
+        botToken: "xoxb-token-1"
+        appToken: "xapp-token-1"
+      secondary:
+        enabled: true
+        name: "Secondary Workspace"
+        botToken: "xoxb-token-2"
+        appToken: "xapp-token-2"
+```
+
+## Security
+
+### DM Policy
+
+```yaml
+channels:
+  slack:
+    dm:
+      policy: pairing  # Options: open, pairing, allowlist, off
+      allowFrom:
+        - "U01234ABCDE"  # Slack user IDs
+```
+
+### Channel Configuration
+
+```yaml
+channels:
+  slack:
+    groupPolicy: allowlist  # Options: allowlist, open, off
+    channels:
+      "C01234ABCDE":  # Channel ID
+        requireMention: true
+        toolPolicy: default
+      "C56789FGHIJ":
+        requireMention: false
+```
+
+### User Token (Optional)
+
+For read-only operations or enhanced permissions:
+
+```yaml
+channels:
+  slack:
+    userToken: "xoxp-user-token"
+    userTokenReadOnly: true  # Prevent writes with user token
+```
+
+## Advanced Features
+
+### Thread Support
+
+```yaml
+channels:
+  slack:
+    replyToMode: auto  # Options: off, auto, always
+```
+
+- `off`: No threading
+- `auto`: Thread if original message was in thread
+- `always`: Always reply in thread
+
+### Media Settings
+
+```yaml
+channels:
+  slack:
+    mediaMaxMb: 100  # Slack file upload limit
+```
+
+### Slash Commands
+
+```yaml
+channels:
+  slack:
+    slashCommand: "/simpleclaw"  # Custom slash command name
+```
+
+Configure in Slack app settings:
+1. Go to "Slash Commands"
+2. Create command: `/simpleclaw`
+3. No request URL needed (Socket Mode)
+
+### Message Streaming
+
+Slack supports message streaming with coalescing:
+
+```yaml
+channels:
+  slack:
+    # Streaming enabled by default
+    # Default coalesce: minChars=1500, idleMs=1000
+```
+
+## Message Features
+
+### Sending Messages
+
+```bash
+# Send to channel
+simpleclaw message send slack C01234ABCDE "Hello channel!"
+
+# Send DM
+simpleclaw message send slack user:U01234ABCDE "Hello user!"
+
+# With media
+simpleclaw message send slack C01234ABCDE "Photo" --media-url "https://example.com/image.jpg"
+
+# Thread reply
+simpleclaw message send slack C01234ABCDE "Reply" --thread-id 1234567890.123456
+```
+
+### Target Formats
+
+- Channel: `C01234ABCDE`
+- User DM: `user:U01234ABCDE` or `U01234ABCDE`
+- Thread: Use channel ID with `--thread-id`
+
+### Reactions
+
+React to messages:
+
+```yaml
+channels:
+  slack:
+    # Reactions supported by default
+```
+
+### Rich Formatting
+
+Slack supports mrkdwn formatting:
+
+```markdown
+*bold* _italic_ ~strikethrough~
+<https://example.com|link text>
+`code` ```code block```
+```
+
+## Channel Management
+
+### Getting Channel IDs
+
+1. Right-click channel name in Slack
+2. Select "Copy link"
+3. Extract ID from URL: `https://workspace.slack.com/archives/C01234ABCDE`
+
+Or use SimpleClaw to resolve:
+
+```bash
+simpleclaw channels resolve slack "#general" --kind group
+```
+
+### Live Directory
+
+List channels and users from Slack API:
+
+```bash
+# List channels
+simpleclaw directory list slack --kind group
+
+# List users
+simpleclaw directory list slack --kind peer
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Bot Not Receiving Messages">
+    Check Socket Mode connection:
+    
+    ```bash
+    simpleclaw channels status slack
+    ```
+    
+    Verify event subscriptions are enabled and bot events are configured in Slack App settings.
+  </Accordion>
+  
+  <Accordion title="Missing Bot Scopes">
+    Ensure all required OAuth scopes are added in "OAuth & Permissions":
+    - `chat:write`
+    - `channels:history`
+    - `app_mentions:read`
+    
+    After adding scopes, reinstall the app.
+  </Accordion>
+  
+  <Accordion title="App Token Issues">
+    App token must have `connections:write` scope.
+    
+    Verify in Slack App settings → Basic Information → App-Level Tokens.
+  </Accordion>
+  
+  <Accordion title="Channel Messages Ignored">
+    With `groupPolicy: allowlist`, channel must be explicitly allowed:
+    
+    ```yaml
+    channels:
+      "C01234ABCDE": {}  # Add channel
+    ```
+    
+    Or use `groupPolicy: open` (mention-gated).
+  </Accordion>
+  
+  <Accordion title="Mention Not Working">
+    Ensure bot is mentioned with `@BotName` in the message.
+    
+    App must be added to the channel for mentions to work.
+  </Accordion>
+</AccordionGroup>
+
+## CLI Commands
+
+```bash
+# Setup
+simpleclaw setup slack --bot-token "xoxb-..." --app-token "xapp-..."
+simpleclaw setup slack --use-env
+
+# Status
+simpleclaw channels status slack
+simpleclaw channels status slack --probe
+
+# Send message
+simpleclaw message send slack <channel-id> <message>
+
+# Resolve
+simpleclaw channels resolve slack "#channel-name" --kind group
+
+# Directory
+simpleclaw directory list slack --kind group
+
+# Pairing
+simpleclaw pairing approve slack U01234ABCDE
+```
+
+## API Reference
+
+Slack channel implementation: `extensions/slack/src/channel.ts`
+
+### Channel ID
+
+`slack`
+
+### Target ID Format
+
+- Channels: Slack channel ID (e.g., `C01234ABCDE`)
+- User DMs: `user:U01234ABCDE` or user ID
+- Threads: Channel ID with thread timestamp
+
+### Capabilities
+
+- Chat types: `direct`, `channel`, `thread`
+- Features: `reactions`, `threads`, `media`, `nativeCommands`
+- Delivery mode: `direct`
+- Text chunk limit: 4000 characters
+- Streaming: Supported with coalescing (minChars: 1500, idleMs: 1000)
+
+### Configuration Schema
+
+See `SlackConfigSchema` in source for full schema.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Socket Mode" icon="plug">
+    Socket Mode works behind firewalls without webhook URLs
+  </Card>
+  
+  <Card title="Minimal Scopes" icon="shield">
+    Only request OAuth scopes your bot needs
+  </Card>
+  
+  <Card title="Allowlist Channels" icon="list">
+    Restrict bot to specific channels:
+    ```yaml
+    groupPolicy: allowlist
+    ```
+  </Card>
+  
+  <Card title="Thread Responses" icon="comments">
+    Keep conversations organized:
+    ```yaml
+    replyToMode: auto
+    ```
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Configuration" icon="shield" href="/security">
+    Configure DM policies and allowlists
+  </Card>
+  <Card title="Slash Commands" icon="slash" href="/features/commands">
+    Set up custom Slack commands
+  </Card>
+</CardGroup>

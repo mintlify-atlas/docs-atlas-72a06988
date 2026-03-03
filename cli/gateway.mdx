@@ -1,0 +1,191 @@
+---
+title: "Gateway CLI"
+description: "Run, inspect, and query the WebSocket Gateway"
+---
+
+The `gateway` command manages the SimpleClaw WebSocket Gateway server that connects messaging channels to AI agents.
+
+## Commands
+
+### gateway run
+
+Run the WebSocket Gateway in the foreground.
+
+```bash
+simpleclaw gateway run
+```
+
+<ParamField path="--port" type="number">
+  Gateway port number
+</ParamField>
+
+<ParamField path="--bind" type="string">
+  Bind mode: `loopback`, `tailnet`, `lan`, `auto`, or `custom`
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Force start even if validation fails
+</ParamField>
+
+### gateway status
+
+Show gateway service status and probe the Gateway.
+
+```bash
+simpleclaw gateway status
+```
+
+### gateway call
+
+Call a Gateway RPC method directly.
+
+```bash
+simpleclaw gateway call <method>
+```
+
+<ParamField path="method" type="string" required>
+  Method name (e.g., `health`, `status`, `system-presence`, `cron.*`)
+</ParamField>
+
+<ParamField path="--params" type="json">
+  JSON object string for method parameters (default: `{}`)
+</ParamField>
+
+<ParamField path="--url" type="string">
+  Gateway WebSocket URL
+</ParamField>
+
+<ParamField path="--token" type="string">
+  Gateway authentication token
+</ParamField>
+
+<ParamField path="--password" type="string">
+  Gateway authentication password
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output result as JSON
+</ParamField>
+
+**Example:**
+
+```bash
+simpleclaw gateway call health
+simpleclaw gateway call status --json
+```
+
+### gateway usage-cost
+
+Fetch usage cost summary from session logs.
+
+```bash
+simpleclaw gateway usage-cost
+```
+
+<ParamField path="--days" type="number">
+  Number of days to include (default: 30)
+</ParamField>
+
+<ParamField path="--url" type="string">
+  Gateway WebSocket URL
+</ParamField>
+
+<ParamField path="--token" type="string">
+  Gateway authentication token
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output result as JSON
+</ParamField>
+
+### gateway health
+
+Fetch Gateway health status.
+
+```bash
+simpleclaw gateway health
+```
+
+<ParamField path="--url" type="string">
+  Gateway WebSocket URL
+</ParamField>
+
+<ParamField path="--token" type="string">
+  Gateway authentication token
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output result as JSON
+</ParamField>
+
+### gateway probe
+
+Show gateway reachability, discovery, health, and status summary (local and remote).
+
+```bash
+simpleclaw gateway probe
+```
+
+<ParamField path="--url" type="string">
+  Explicit Gateway WebSocket URL (still probes localhost)
+</ParamField>
+
+<ParamField path="--ssh" type="string">
+  SSH target for remote gateway tunnel (`user@host` or `user@host:port`)
+</ParamField>
+
+<ParamField path="--ssh-identity" type="string">
+  SSH identity file path
+</ParamField>
+
+<ParamField path="--ssh-auto" type="boolean">
+  Try to derive an SSH target from Bonjour discovery
+</ParamField>
+
+<ParamField path="--token" type="string">
+  Gateway token (applies to all probes)
+</ParamField>
+
+<ParamField path="--password" type="string">
+  Gateway password (applies to all probes)
+</ParamField>
+
+<ParamField path="--timeout" type="number">
+  Overall probe budget in milliseconds (default: 3000)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+### gateway discover
+
+Discover gateways via Bonjour (local and wide-area if configured).
+
+```bash
+simpleclaw gateway discover
+```
+
+<ParamField path="--timeout" type="number">
+  Per-command timeout in milliseconds (default: 2000)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+## Examples
+
+```bash
+# Run the gateway in the foreground
+simpleclaw gateway run
+
+# Show service status and probe reachability
+simpleclaw gateway status
+
+# Find local and wide-area gateway beacons
+simpleclaw gateway discover
+
+# Call a gateway RPC method directly
+simpleclaw gateway call health
+```

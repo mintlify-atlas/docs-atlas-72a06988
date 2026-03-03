@@ -1,0 +1,354 @@
+---
+title: Configuration
+description: Configure SimpleClaw gateway, models, channels, and routing
+---
+
+# Configuration
+
+SimpleClaw stores configuration in `~/.simpleclaw/config.yaml` (or `~/.openclaw/config.yaml` for compatibility). The config file uses YAML format with environment variable substitution and file includes.
+
+## Config File Location
+
+The default config path is:
+
+```
+~/.simpleclaw/config.yaml
+```
+
+You can override this with the `SIMPLECLAW_CONFIG` environment variable.
+
+## Basic Structure
+
+A minimal config file:
+
+```yaml
+gateway:
+  mode: local
+  bind: loopback
+  port: 18789
+
+models:
+  - id: anthropic-claude
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    apiKey: ${ANTHROPIC_API_KEY}
+
+channels:
+  telegram:
+    enabled: true
+    token: ${TELEGRAM_BOT_TOKEN}
+    dmPolicy: pairing
+```
+
+<Info>
+Environment variables are expanded using `${VAR_NAME}` syntax.
+</Info>
+
+## Gateway Configuration
+
+The `gateway` section controls the WebSocket server:
+
+<ParamField path="mode" type="string" default="local">
+  Gateway mode: `local` or `remote`
+</ParamField>
+
+<ParamField path="bind" type="string" default="loopback">
+  Bind address: `loopback` (127.0.0.1) or `all` (0.0.0.0)
+</ParamField>
+
+<ParamField path="port" type="number" default="18789">
+  WebSocket server port
+</ParamField>
+
+<ParamField path="auth.mode" type="string" default="none">
+  Authentication mode: `none`, `password`, or `token`
+</ParamField>
+
+<ParamField path="auth.password" type="string">
+  Password for `password` auth mode
+</ParamField>
+
+<ParamField path="tailscale.mode" type="string" default="off">
+  Tailscale exposure: `off`, `serve` (tailnet-only), or `funnel` (public)
+</ParamField>
+
+### Example: Remote Gateway with Password Auth
+
+```yaml
+gateway:
+  mode: remote
+  bind: loopback  # Tailscale will expose it
+  port: 18789
+  auth:
+    mode: password
+    password: ${GATEWAY_PASSWORD}
+  tailscale:
+    mode: funnel
+    resetOnExit: true
+```
+
+<Warning>
+When using `tailscale.mode: funnel` (public HTTPS), you **must** set `auth.mode: password`. SimpleClaw enforces this for security.
+</Warning>
+
+## Model Configuration
+
+The `models` array defines LLM providers:
+
+```yaml
+models:
+  - id: anthropic-main
+    provider: anthropic
+    model: claude-3-5-sonnet-20241022
+    apiKey: ${ANTHROPIC_API_KEY}
+    
+  - id: openai-gpt4
+    provider: openai
+    model: gpt-4-turbo
+    apiKey: ${OPENAI_API_KEY}
+    
+  - id: bedrock-claude
+    provider: bedrock
+    model: anthropic.claude-3-sonnet-20240229-v1:0
+    region: us-east-1
+```
+
+<ParamField path="id" type="string" required>
+  Unique identifier for this model configuration
+</ParamField>
+
+<ParamField path="provider" type="string" required>
+  Provider name: `anthropic`, `openai`, `google`, `bedrock`, etc.
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  Model identifier (provider-specific)
+</ParamField>
+
+<ParamField path="apiKey" type="string">
+  API key for authentication (use `${VAR}` for env vars)
+</ParamField>
+
+<ParamField path="region" type="string">
+  AWS region (for Bedrock provider)
+</ParamField>
+
+See [Core Concepts: Models](/concepts/models) for details on model configuration, failover, and authentication modes.
+
+## Channel Configuration
+
+The `channels` object configures messaging platforms:
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    token: ${TELEGRAM_BOT_TOKEN}
+    dmPolicy: pairing
+    allowFrom:
+      - "123456789"  # Specific user ID
+      
+  discord:
+    enabled: true
+    token: ${DISCORD_BOT_TOKEN}
+    dmPolicy: pairing
+    guilds:
+      - id: "987654321"
+        allowFrom:
+          - "*"  # All guild members
+          
+  whatsapp:
+    enabled: true
+    dmPolicy: pairing
+```
+
+### Common Channel Options
+
+<ParamField path="enabled" type="boolean" default="false">
+  Enable or disable this channel
+</ParamField>
+
+<ParamField path="token" type="string">
+  Bot token (for Telegram, Discord, Slack)
+</ParamField>
+
+<ParamField path="dmPolicy" type="string" default="pairing">
+  DM access policy: `open` or `pairing`
+</ParamField>
+
+<ParamField path="allowFrom" type="array">
+  List of allowed user IDs or `["*"]` for all
+</ParamField>
+
+<Warning>
+Default DM policy is `pairing` for security. Unknown senders get a pairing code. Approve with `simpleclaw pairing approve <channel> <code>`.
+</Warning>
+
+See the [Channels Guide](/channels/overview) for channel-specific configuration.
+
+## Routing Configuration
+
+Route messages to specific agents based on channel, account, or peer:
+
+```yaml
+routing:
+  bindings:
+    - agent: work-agent
+      channels:
+        - telegram:account1
+      
+    - agent: personal-agent
+      channels:
+        - discord
+        - whatsapp
+```
+
+<ParamField path="agent" type="string" required>
+  Target agent ID
+</ParamField>
+
+<ParamField path="channels" type="array">
+  List of channel matchers: `<channel>`, `<channel>:<account>`, or `<channel>:<account>:<peer>`
+</ParamField>
+
+See [Core Concepts: Routing](/concepts/routing) for routing precedence and session keys.
+
+## Agent Configuration
+
+Define multiple agents with isolated workspaces:
+
+```yaml
+agents:
+  - id: main
+    workspace: ~/.simpleclaw/agents/main
+    model: anthropic-main
+    
+  - id: work-agent
+    workspace: ~/.simpleclaw/agents/work
+    model: openai-gpt4
+```
+
+<ParamField path="id" type="string" required>
+  Unique agent identifier
+</ParamField>
+
+<ParamField path="workspace" type="string">
+  Workspace directory for this agent
+</ParamField>
+
+<ParamField path="model" type="string">
+  Default model ID for this agent
+</ParamField>
+
+See [Core Concepts: Agents](/concepts/agents) for agent management and configuration.
+
+## Using the CLI
+
+Manage configuration via the CLI:
+
+### View current config
+
+```bash
+simpleclaw config get
+```
+
+### Set a value
+
+```bash
+simpleclaw config set gateway.port 8080
+```
+
+### Get a specific value
+
+```bash
+simpleclaw config get channels.telegram.enabled
+```
+
+### Validate config
+
+```bash
+simpleclaw doctor
+```
+
+The `doctor` command checks for:
+- Invalid configuration
+- Missing API keys
+- Risky DM policies
+- Permission issues
+- Port conflicts
+
+## Environment Variables
+
+Common environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `DISCORD_BOT_TOKEN` | Discord bot token |
+| `SLACK_BOT_TOKEN` | Slack bot token |
+| `GATEWAY_PASSWORD` | Gateway password auth |
+| `SIMPLECLAW_CONFIG` | Override config file path |
+
+Store sensitive values in environment variables and reference them in config:
+
+```yaml
+channels:
+  telegram:
+    token: ${TELEGRAM_BOT_TOKEN}
+```
+
+<Tip>
+Create a `.env` file or add to `~/.profile` for persistent environment variables.
+</Tip>
+
+## File Includes
+
+Split large configs into multiple files:
+
+```yaml
+gateway:
+  mode: local
+  
+include:
+  - channels.yaml
+  - models.yaml
+  - routing.yaml
+```
+
+Then in `channels.yaml`:
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    token: ${TELEGRAM_BOT_TOKEN}
+```
+
+## Config Schema Validation
+
+SimpleClaw validates configuration against a Zod schema. Invalid configs will fail with detailed error messages.
+
+Run validation:
+
+```bash
+simpleclaw config validate
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Add Channels" icon="messages" href="/guides/adding-channels">
+    Connect WhatsApp, Telegram, Discord, and more
+  </Card>
+  <Card title="Configure Routing" icon="route" href="/concepts/routing">
+    Route messages to different agents
+  </Card>
+  <Card title="Model Setup" icon="brain" href="/concepts/models">
+    Configure LLM providers and failover
+  </Card>
+  <Card title="Security" icon="shield" href="/security/overview">
+    Set up DM pairing and allowlists
+  </Card>
+</CardGroup>

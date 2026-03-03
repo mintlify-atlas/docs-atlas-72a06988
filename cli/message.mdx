@@ -1,0 +1,229 @@
+---
+title: "Message CLI"
+description: "Send, read, and manage messages and channel actions"
+---
+
+The `message` command provides direct access to messaging channel actions including sending messages, polls, reactions, and more.
+
+## message send
+
+Send a message to a channel.
+
+```bash
+simpleclaw message send --target <destination> --message <text>
+```
+
+<ParamField path="--target" type="string" required>
+  Message target (phone number, channel id, user id, etc.)
+</ParamField>
+
+<ParamField path="--channel" type="string">
+  Channel name (e.g., `telegram`, `discord`, `slack`)
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id for the channel
+</ParamField>
+
+<ParamField path="--message" type="string">
+  Message body (required unless `--media` is set)
+</ParamField>
+
+<ParamField path="--media" type="string">
+  Attach media (image/audio/video/document). Accepts local paths or URLs.
+</ParamField>
+
+<ParamField path="--buttons" type="json">
+  Telegram inline keyboard buttons as JSON (array of button rows)
+</ParamField>
+
+<ParamField path="--components" type="json">
+  Discord components payload as JSON
+</ParamField>
+
+<ParamField path="--card" type="json">
+  Adaptive Card JSON object (when supported by the channel)
+</ParamField>
+
+<ParamField path="--reply-to" type="string">
+  Reply-to message id
+</ParamField>
+
+<ParamField path="--thread-id" type="string">
+  Thread id (Telegram forum thread)
+</ParamField>
+
+<ParamField path="--gif-playback" type="boolean">
+  Treat video media as GIF playback (WhatsApp only)
+</ParamField>
+
+<ParamField path="--silent" type="boolean">
+  Send message silently without notification (Telegram and Discord)
+</ParamField>
+
+### Examples
+
+```bash
+# Send a text message
+simpleclaw message send --target +15555550123 --message "Hi"
+
+# Send a message with media
+simpleclaw message send --target +15555550123 --message "Hi" --media photo.jpg
+```
+
+## message poll
+
+Create a poll.
+
+```bash
+simpleclaw message poll --target <destination> --poll-question <question>
+```
+
+<ParamField path="--target" type="string" required>
+  Message target
+</ParamField>
+
+<ParamField path="--channel" type="string">
+  Channel name
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id
+</ParamField>
+
+<ParamField path="--poll-question" type="string" required>
+  Poll question
+</ParamField>
+
+<ParamField path="--poll-option" type="string">
+  Poll option (repeat 2-12 times)
+</ParamField>
+
+<ParamField path="--poll-multi" type="boolean">
+  Allow multiple selections
+</ParamField>
+
+<ParamField path="--poll-duration-hours" type="number">
+  Poll duration in hours (Discord)
+</ParamField>
+
+<ParamField path="--poll-duration-seconds" type="number">
+  Poll duration in seconds (Telegram; 5-600)
+</ParamField>
+
+<ParamField path="--poll-anonymous" type="boolean">
+  Send an anonymous poll (Telegram)
+</ParamField>
+
+<ParamField path="--poll-public" type="boolean">
+  Send a non-anonymous poll (Telegram)
+</ParamField>
+
+<ParamField path="--message" type="string">
+  Optional message body
+</ParamField>
+
+<ParamField path="--silent" type="boolean">
+  Send poll silently without notification (Telegram and Discord)
+</ParamField>
+
+<ParamField path="--thread-id" type="string">
+  Thread id (Telegram forum topic / Slack thread ts)
+</ParamField>
+
+**Example:**
+
+```bash
+simpleclaw message poll --channel discord --target channel:123 --poll-question "Snack?" --poll-option Pizza --poll-option Sushi
+```
+
+## message react
+
+Add or remove a reaction.
+
+```bash
+simpleclaw message react --target <destination> --message-id <id> --emoji <emoji>
+```
+
+<ParamField path="--target" type="string" required>
+  Message target
+</ParamField>
+
+<ParamField path="--channel" type="string">
+  Channel name
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id
+</ParamField>
+
+<ParamField path="--message-id" type="string" required>
+  Message id
+</ParamField>
+
+<ParamField path="--emoji" type="string">
+  Emoji for reactions
+</ParamField>
+
+<ParamField path="--remove" type="boolean">
+  Remove reaction
+</ParamField>
+
+<ParamField path="--participant" type="string">
+  WhatsApp reaction participant
+</ParamField>
+
+<ParamField path="--from-me" type="boolean">
+  WhatsApp reaction fromMe
+</ParamField>
+
+<ParamField path="--target-author" type="string">
+  Signal reaction target author (uuid or phone)
+</ParamField>
+
+<ParamField path="--target-author-uuid" type="string">
+  Signal reaction target author uuid
+</ParamField>
+
+**Example:**
+
+```bash
+simpleclaw message react --channel discord --target 123 --message-id 456 --emoji "✅"
+```
+
+## message reactions
+
+List reactions on a message.
+
+```bash
+simpleclaw message reactions --target <destination> --message-id <id>
+```
+
+<ParamField path="--target" type="string" required>
+  Message target
+</ParamField>
+
+<ParamField path="--message-id" type="string" required>
+  Message id
+</ParamField>
+
+<ParamField path="--limit" type="number">
+  Result limit
+</ParamField>
+
+## Other Subcommands
+
+The `message` command also includes:
+
+- `message broadcast` - Broadcast messages to multiple targets
+- `message read` - Mark messages as read
+- `message edit` - Edit sent messages
+- `message delete` - Delete messages
+- `message pin` - Pin/unpin messages
+- `message permissions` - Check message permissions
+- `message search` - Search messages
+- `message thread` - Thread operations
+- `message emoji` - Manage custom emoji
+- `message sticker` - Manage stickers
+
+Run `simpleclaw message <subcommand> --help` for detailed options.

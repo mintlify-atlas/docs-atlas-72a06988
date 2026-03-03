@@ -1,0 +1,570 @@
+---
+title: Skills Platform
+description: Extensible skills system for AI agents in SimpleClaw
+---
+
+SimpleClaw's Skills Platform enables agents to access specialized tools, commands, and context through a flexible skill loading system.
+
+## Overview
+
+Skills provide:
+
+- **Structured prompts** - Markdown-based skill definitions
+- **Auto-discovery** - Load skills from multiple directories
+- **Eligibility filtering** - OS, binary, and environment-based filtering
+- **Command integration** - Expose skills as slash commands
+- **Precedence rules** - Workspace > project > personal > managed > bundled
+
+## Architecture
+
+Skills are discovered and loaded from multiple sources (src/agents/skills/workspace.ts:220):
+
+```typescript
+function loadSkillEntries(workspaceDir: string): SkillEntry[] {
+  // Load order (last wins for name conflicts):
+  // 1. Extra dirs (config.skills.load.extraDirs)
+  // 2. Bundled skills (SimpleClaw built-in)
+  // 3. Managed skills (~/.openclaw/skills)
+  // 4. Personal agents skills (~/.agents/skills)
+  // 5. Project agents skills (<workspace>/.agents/skills)
+  // 6. Workspace skills (<workspace>/skills)
+}
+```
+
+**Skill structure:**
+
+```
+skills/
+  github/
+    SKILL.md          # Main skill definition
+    tools.json        # Optional: tool schemas
+    context.txt       # Optional: additional context
+  slack/
+    SKILL.md
+```
+
+## Skill Definition Format
+
+A skill is a Markdown file with frontmatter and instructions:
+
+```markdown
+---
+always: false
+os: ["macos", "linux"]
+requires:
+  bins: ["gh"]
+  env: ["GITHUB_TOKEN"]
+emoji: "🐙"
+homepage: "https://cli.github.com"
+---
+
+# GitHub CLI Skill
+
+Use the `gh` CLI to interact with GitHub.
+
+## Commands
+
+- `gh pr list` - List pull requests
+- `gh issue create` - Create new issue
+- `gh repo view` - View repository details
+
+## Examples
+
+List open PRs:
+```bash
+gh pr list --state open
+```
+
+Create issue:
+```bash
+gh issue create --title "Bug" --body "Description"
+```
+```
+
+## Frontmatter Options
+
+From `src/agents/skills/types.ts:19`:
+
+```typescript
+type SimpleClawSkillMetadata = {
+  always?: boolean;           // Always include (ignore eligibility)
+  skillKey?: string;          // Custom skill identifier
+  primaryEnv?: string;        // Main environment variable
+  emoji?: string;             // Display emoji
+  homepage?: string;          // Documentation URL
+  os?: string[];              // Supported OSes: macos, linux, windows
+  
+  requires?: {
+    bins?: string[];          // Required executables (AND)
+    anyBins?: string[];       // At least one required (OR)
+    env?: string[];           // Required env vars
+    config?: string[];        // Required config keys
+  };
+  
+  install?: SkillInstallSpec[];  // Installation instructions
+};
+```
+
+### OS Filtering
+
+```yaml
+---
+os: ["macos"]  # Only load on macOS
+---
+```
+
+Platform names: `macos`, `linux`, `windows`, `darwin`, `win32`
+
+### Binary Requirements
+
+```yaml
+---
+requires:
+  bins: ["docker", "kubectl"]  # Both required
+  anyBins: ["npm", "pnpm", "yarn"]  # At least one
+---
+```
+
+Binaries are checked via `which` or PATH lookup.
+
+### Environment Variables
+
+```yaml
+---
+requires:
+  env: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]
+primaryEnv: "OPENAI_API_KEY"
+---
+```
+
+Primary env var shown in skill status.
+
+### Installation Specs
+
+```yaml
+---
+install:
+  - kind: brew
+    formula: gh
+  - kind: node
+    package: "@openai/cli"
+  - kind: download
+    url: "https://example.com/tool.zip"
+    extract: true
+    targetDir: "~/.local/bin"
+---
+```
+
+Install types: `brew`, `node`, `go`, `uv`, `download`
+
+## Skill Discovery
+
+### Default Locations
+
+```
+1. ~/.openclaw/skills/          # Managed skills
+2. ~/.agents/skills/            # Personal agent skills
+3. <workspace>/.agents/skills/  # Project agent skills
+4. <workspace>/skills/          # Workspace skills (highest priority)
+5. Bundled skills               # SimpleClaw built-in
+```
+
+### Custom Directories
+
+```yaml
+skills:
+  load:
+    extraDirs:
+      - "~/my-skills"
+      - "/opt/company-skills"
+```
+
+### Plugin Skills
+
+Plugins can contribute skills via package.json:
+
+```json
+{
+  "openclaw": {
+    "extensions": {
+      "skillDirs": ["skills"]
+    }
+  }
+}
+```
+
+See `src/agents/skills/plugin-skills.ts`
+
+## Skill Filtering
+
+### Agent-Level Filter
+
+Restrict skills per agent:
+
+```yaml
+agents:
+  coding:
+    skillFilter: ["github", "git", "docker"]
+  
+  writing:
+    skillFilter: ["markdown", "grammar"]
+```
+
+### Invocation Policy
+
+```yaml
+---
+user-invocable: false          # Disable slash command
+disable-model-invocation: true # Hide from agent prompt
+---
+```
+
+From `src/agents/skills/types.ts:35`:
+
+```typescript
+type SkillInvocationPolicy = {
+  userInvocable: boolean;           // Allow /command invocation
+  disableModelInvocation: boolean;  // Hide from model prompt
+};
+```
+
+## Skill Commands
+
+Skills can expose slash commands (src/agents/skills/workspace.ts:654):
+
+```markdown
+---
+command-dispatch: tool
+command-tool: github_search
+command-arg-mode: raw
+---
+```
+
+Command is auto-generated from skill name:
+- `github-cli` → `/github_cli`
+- `Docker Tools` → `/docker_tools`
+
+Max command length: 32 characters
+
+### Command Specs
+
+```typescript
+type SkillCommandSpec = {
+  name: string;              // Sanitized command name
+  skillName: string;         // Original skill name
+  description: string;       // Truncated to 100 chars
+  dispatch?: {
+    kind: "tool";
+    toolName: string;        // Tool to invoke
+    argMode: "raw";          // Pass args as raw string
+  };
+};
+```
+
+## Skill Limits
+
+Prompt and loading limits (src/agents/skills/workspace.ts:95):
+
+```yaml
+skills:
+  limits:
+    maxCandidatesPerRoot: 300      # Max dirs to scan
+    maxSkillsLoadedPerSource: 200  # Max skills per source
+    maxSkillsInPrompt: 150         # Max in agent prompt
+    maxSkillsPromptChars: 30000    # Max prompt characters
+    maxSkillFileBytes: 256000      # Max SKILL.md size
+```
+
+If limits exceeded, skills are truncated with warning.
+
+## Skill Snapshots
+
+Skills are compiled into snapshots for agent runs (src/agents/skills/types.ts:82):
+
+```typescript
+type SkillSnapshot = {
+  prompt: string;                    // Formatted skill prompt
+  skills: Array<{
+    name: string;
+    primaryEnv?: string;
+    requiredEnv?: string[];
+  }>;
+  skillFilter?: string[];            // Applied filter
+  resolvedSkills?: Skill[];          // Full skill objects
+  version?: number;                  // Snapshot version
+};
+```
+
+Snapshot is cached and reused across agent turns.
+
+## CLI Operations
+
+```bash
+# List all skills
+openclaw skills list
+
+# List eligible skills for current environment
+openclaw skills list --eligible
+
+# Show skill details
+openclaw skills show github
+
+# Check skill status
+openclaw skills check
+
+# Refresh skills cache
+openclaw skills refresh
+
+# Install skill dependencies
+openclaw skills install github
+```
+
+## Programmatic API
+
+### Load Skills
+
+```typescript
+import { loadWorkspaceSkillEntries } from "simpleclaw/agents/skills";
+
+const entries = loadWorkspaceSkillEntries(workspaceDir, {
+  config,
+  managedSkillsDir: "~/.openclaw/skills",
+  bundledSkillsDir: "/opt/simpleclaw/skills"
+});
+
+for (const entry of entries) {
+  console.log(entry.skill.name);
+  console.log(entry.metadata?.os);
+  console.log(entry.metadata?.requires?.bins);
+}
+```
+
+### Build Prompt
+
+```typescript
+import { buildWorkspaceSkillsPrompt } from "simpleclaw/agents/skills";
+
+const prompt = buildWorkspaceSkillsPrompt(workspaceDir, {
+  config,
+  skillFilter: ["github", "docker"],
+  eligibility: {
+    remote: {
+      platforms: ["linux"],
+      hasBin: (bin) => remoteBins.includes(bin),
+      hasAnyBin: (bins) => bins.some(b => remoteBins.includes(b))
+    }
+  }
+});
+
+console.log(prompt);
+```
+
+### Create Snapshot
+
+```typescript
+import { buildWorkspaceSkillSnapshot } from "simpleclaw/agents/skills";
+
+const snapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+  config,
+  skillFilter: ["git", "github"],
+  snapshotVersion: 2
+});
+
+console.log(snapshot.skills.length);
+console.log(snapshot.prompt);
+```
+
+### Filter Skills
+
+```typescript
+import { filterWorkspaceSkillEntries } from "simpleclaw/agents/skills";
+
+const eligible = filterWorkspaceSkillEntries(allEntries, config);
+const macOnly = eligible.filter(e => 
+  e.metadata?.os?.includes("macos")
+);
+```
+
+## Skill Sync
+
+Sync skills to isolated workspace (src/agents/skills/workspace.ts:589):
+
+```typescript
+import { syncSkillsToWorkspace } from "simpleclaw/agents/skills";
+
+await syncSkillsToWorkspace({
+  sourceWorkspaceDir: "/home/user/project",
+  targetWorkspaceDir: "/tmp/isolated-run",
+  config
+});
+```
+
+Copies all eligible skills to target workspace for sandboxed execution.
+
+## Advanced Features
+
+### Path Compaction
+
+Skill paths are compacted to save prompt tokens (src/agents/skills/workspace.ts:45):
+
+```
+Before: /Users/alice/.openclaw/skills/github/SKILL.md
+After:  ~/.openclaw/skills/github/SKILL.md
+
+Savings: ~6 tokens per skill × 150 skills = ~900 tokens
+```
+
+### Nested Skill Roots
+
+Auto-detects nested `skills/` directories:
+
+```
+~/.openclaw/custom/
+  skills/              # Detected as real root
+    github/SKILL.md
+    docker/SKILL.md
+```
+
+### Skill Entry Deduplication
+
+When same skill exists in multiple locations, higher priority wins:
+
+```
+~/.openclaw/skills/github/     # Priority 3
+~/project/skills/github/       # Priority 6 (wins)
+```
+
+## Bundled Skills
+
+SimpleClaw includes built-in skills:
+
+```bash
+ls $(openclaw --paths | grep bundled-skills)
+# Output:
+# browser/
+# docker/
+# git/
+# github/
+# kubernetes/
+# markdown/
+# shell/
+```
+
+Bundled skills dir: `src/agents/skills/bundled-dir.ts`
+
+## Custom Skill Example
+
+Create `~/project/skills/postgres/SKILL.md`:
+
+```markdown
+---
+os: ["macos", "linux"]
+requires:
+  bins: ["psql"]
+  env: ["DATABASE_URL"]
+primaryEnv: "DATABASE_URL"
+emoji: "🐘"
+homepage: "https://www.postgresql.org/docs/"
+install:
+  - kind: brew
+    formula: postgresql
+---
+
+# PostgreSQL Skill
+
+Interact with PostgreSQL databases using `psql`.
+
+## Commands
+
+- `psql -c "<query>"` - Run SQL query
+- `psql -l` - List databases
+- `psql -d <db> -f <file>` - Execute SQL file
+
+## Examples
+
+List tables:
+```bash
+psql -c "\dt"
+```
+
+Query users:
+```bash
+psql -c "SELECT * FROM users LIMIT 10;"
+```
+
+Create backup:
+```bash
+pg_dump mydb > backup.sql
+```
+
+## Environment
+
+Set `DATABASE_URL`:
+```bash
+export DATABASE_URL=postgresql://user:pass@localhost/mydb
+```
+```
+
+Skill auto-loads when `psql` binary exists and `DATABASE_URL` is set.
+
+## Troubleshooting
+
+**Skill not loading?**
+
+Check eligibility:
+```bash
+openclaw skills check
+openclaw skills list --eligible
+```
+
+Verify binary:
+```bash
+which gh
+which docker
+```
+
+Verify env var:
+```bash
+echo $GITHUB_TOKEN
+```
+
+**Skill limit warnings?**
+
+Increase limits:
+```yaml
+skills:
+  limits:
+    maxSkillsInPrompt: 200
+    maxSkillsPromptChars: 50000
+```
+
+Or reduce skills via filter:
+```yaml
+agents:
+  main:
+    skillFilter: ["github", "docker", "git"]
+```
+
+**Command not appearing?**
+
+Check invocation policy:
+```bash
+cat skills/myskill/SKILL.md | grep user-invocable
+```
+
+Ensure not disabled:
+```yaml
+user-invocable: true  # Must be true or omitted
+```
+
+## API Reference
+
+Key files in `src/agents/skills/`:
+
+- `workspace.ts` - Main skill loading logic (src/agents/skills/workspace.ts:220)
+- `types.ts` - Skill type definitions (src/agents/skills/types.ts:1)
+- `config.ts` - Eligibility and config resolution
+- `filter.ts` - Skill filter normalization
+- `frontmatter.ts` - Frontmatter parsing
+- `plugin-skills.ts` - Plugin skill discovery
+- `bundled-dir.ts` - Bundled skills location

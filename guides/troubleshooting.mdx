@@ -1,0 +1,523 @@
+---
+title: "Troubleshooting"
+description: "Common issues and solutions for SimpleClaw"
+---
+
+# Troubleshooting Guide
+
+Common issues and their solutions for SimpleClaw Gateway, channels, and agents.
+
+## Gateway Issues
+
+### Gateway Won't Start
+
+<AccordionGroup>
+  <Accordion title="Port already in use">
+    **Error:** `EADDRINUSE: address already in use`
+
+    **Solution:**
+
+    1. Find process using port 18789:
+       ```bash
+       lsof -i :18789
+       # or on Linux:
+       sudo netstat -tlnp | grep 18789
+       ```
+
+    2. Kill the process:
+       ```bash
+       kill -9 <PID>
+       ```
+
+    3. Or use a different port:
+       ```bash
+       simpleclaw gateway run --port 18790
+       ```
+  </Accordion>
+
+  <Accordion title="Permission denied">
+    **Error:** `EACCES: permission denied`
+
+    **Solution:**
+
+    1. Don't use privileged ports (below 1024) without sudo
+    2. Use default port 18789 (no sudo needed)
+    3. Check file permissions:
+       ```bash
+       ls -la ~/.simpleclaw
+       ```
+  </Accordion>
+
+  <Accordion title="Config errors">
+    **Error:** `Config validation failed`
+
+    **Solution:**
+
+    1. Validate config syntax:
+       ```bash
+       simpleclaw config validate
+       ```
+
+    2. Check for missing required fields:
+       ```bash
+       simpleclaw doctor
+       ```
+
+    3. Reset to defaults if needed:
+       ```bash
+       mv ~/.simpleclaw/simpleclaw.json ~/.simpleclaw/simpleclaw.json.backup
+       simpleclaw onboard
+       ```
+  </Accordion>
+</AccordionGroup>
+
+### Gateway Running but Not Responding
+
+<Steps>
+  <Step title="Check Gateway Status">
+    ```bash
+    simpleclaw gateway status
+    ```
+  </Step>
+
+  <Step title="Verify Port and Bind">
+    ```bash
+    simpleclaw config get gateway.port
+    simpleclaw config get gateway.bind
+    ```
+  </Step>
+
+  <Step title="Test Local Connection">
+    ```bash
+    curl http://localhost:18789/health
+    ```
+  </Step>
+
+  <Step title="Check Logs">
+    ```bash
+    simpleclaw gateway logs --tail 100
+    ```
+  </Step>
+</Steps>
+
+## Channel Issues
+
+### WhatsApp Not Connecting
+
+<AccordionGroup>
+  <Accordion title="QR code not appearing">
+    1. Ensure channel is enabled:
+       ```bash
+       simpleclaw config get channels.whatsapp.enabled
+       ```
+
+    2. Clear credentials and re-login:
+       ```bash
+       rm -rf ~/.simpleclaw/credentials/whatsapp
+       simpleclaw channels login --channel whatsapp
+       ```
+  </Accordion>
+
+  <Accordion title="Connection keeps dropping">
+    1. Check for multiple devices using same credentials
+    2. Verify phone has stable internet connection
+    3. Check Gateway logs:
+       ```bash
+       simpleclaw gateway logs | grep -i whatsapp
+       ```
+  </Accordion>
+
+  <Accordion title="Messages not being received">
+    1. Check allowlist:
+       ```bash
+       simpleclaw config get channels.whatsapp.allowFrom
+       ```
+
+    2. Verify DM policy:
+       ```bash
+       simpleclaw config get channels.whatsapp.dmPolicy
+       ```
+
+    3. Test with allowed number
+  </Accordion>
+</AccordionGroup>
+
+### Telegram Bot Issues
+
+<AccordionGroup>
+  <Accordion title="Bot not responding">
+    1. Verify bot token:
+       ```bash
+       simpleclaw config get channels.telegram.botToken
+       ```
+
+    2. Test token with Telegram API:
+       ```bash
+       curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe
+       ```
+
+    3. Check Gateway logs for errors:
+       ```bash
+       simpleclaw gateway logs | grep -i telegram
+       ```
+  </Accordion>
+
+  <Accordion title="Can't find bot in Telegram">
+    1. Check bot username with BotFather
+    2. Send `/start` to activate bot
+    3. Verify bot isn't blocked in your account
+  </Accordion>
+</AccordionGroup>
+
+### Discord Bot Issues
+
+<AccordionGroup>
+  <Accordion title="Bot offline">
+    1. Check bot token:
+       ```bash
+       simpleclaw config get channels.discord.token
+       ```
+
+    2. Verify privileged intents are enabled in Discord Developer Portal
+    3. Check Gateway connection:
+       ```bash
+       simpleclaw channels status --probe
+       ```
+  </Accordion>
+
+  <Accordion title="Bot not seeing messages">
+    1. Enable **Message Content Intent** in Discord Developer Portal
+    2. Verify bot has permission to read messages in the channel
+    3. Check Gateway logs:
+       ```bash
+       simpleclaw gateway logs | grep -i discord
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Agent Issues
+
+### Agent Not Responding
+
+<AccordionGroup>
+  <Accordion title="Model/provider errors">
+    1. Check API keys:
+       ```bash
+       simpleclaw config get providers
+       ```
+
+    2. Verify model is configured:
+       ```bash
+       simpleclaw config get agent.model
+       ```
+
+    3. Test provider authentication:
+       ```bash
+       simpleclaw login --provider anthropic
+       ```
+
+    4. Check for rate limits in logs:
+       ```bash
+       simpleclaw gateway logs --level error
+       ```
+  </Accordion>
+
+  <Accordion title="Slow responses">
+    1. Check thinking level:
+       ```bash
+       simpleclaw config get agent.thinkingLevel
+       ```
+
+    2. Switch to faster model:
+       ```bash
+       simpleclaw config set agent.model '"anthropic/claude-sonnet-4"' --json
+       ```
+
+    3. Monitor token usage:
+       ```bash
+       simpleclaw agent --message "test" --usage full
+       ```
+  </Accordion>
+
+  <Accordion title="Agent using wrong model">
+    1. Check session configuration:
+       ```bash
+       simpleclaw sessions list
+       ```
+
+    2. Update session model:
+       ```bash
+       simpleclaw sessions patch main --model "anthropic/claude-opus-4-6"
+       ```
+
+    3. Or reset session:
+       ```bash
+       simpleclaw sessions reset main
+       ```
+  </Accordion>
+</AccordionGroup>
+
+### Tool Execution Errors
+
+<AccordionGroup>
+  <Accordion title="bash tool failing">
+    1. Check shell environment:
+       ```bash
+       simpleclaw config get shell.path
+       ```
+
+    2. Test bash directly:
+       ```bash
+       simpleclaw agent --message "Run: echo test" --tool bash
+       ```
+
+    3. Check for command restrictions
+  </Accordion>
+
+  <Accordion title="browser tool not working">
+    1. Verify browser is enabled:
+       ```bash
+       simpleclaw config get browser.enabled
+       ```
+
+    2. Check Chrome/Chromium installation:
+       ```bash
+       which chromium-browser
+       # or
+       which google-chrome
+       ```
+
+    3. See [Browser Troubleshooting](#browser-issues) for Linux issues
+  </Accordion>
+</AccordionGroup>
+
+## Remote Access Issues
+
+### Can't Connect to Remote Gateway
+
+<AccordionGroup>
+  <Accordion title="Tailscale connection failed">
+    1. Verify Tailscale is running:
+       ```bash
+       tailscale status
+       ```
+
+    2. Check Tailscale Serve config:
+       ```bash
+       simpleclaw config get gateway.tailscale
+       ```
+
+    3. Test Tailscale URL:
+       ```bash
+       curl https://<hostname>.tailnet.ts.net/health
+       ```
+  </Accordion>
+
+  <Accordion title="SSH tunnel drops">
+    1. Use autossh for persistence:
+       ```bash
+       autossh -M 0 -L 18789:127.0.0.1:18789 user@server -N
+       ```
+
+    2. Check SSH keep-alive settings in `~/.ssh/config`:
+       ```
+       Host your-server
+         ServerAliveInterval 60
+         ServerAliveCountMax 3
+       ```
+  </Accordion>
+
+  <Accordion title="Authentication errors">
+    1. Check password is set (for public access):
+       ```bash
+       simpleclaw config get gateway.auth.password
+       ```
+
+    2. Verify auth mode:
+       ```bash
+       simpleclaw config get gateway.auth.mode
+       ```
+
+    3. Test authentication:
+       ```bash
+       curl -u :password https://gateway.example.com/health
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Installation Issues
+
+### npm Install Failures
+
+<AccordionGroup>
+  <Accordion title="Node version too old">
+    **Error:** `Unsupported engine`
+
+    **Solution:**
+
+    Install Node.js 22+:
+    ```bash
+    # Using nvm
+    nvm install 22
+    nvm use 22
+
+    # Or via package manager
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    ```
+  </Accordion>
+
+  <Accordion title="Permission errors during install">
+    **Error:** `EACCES: permission denied`
+
+    **Solution:**
+
+    Use npm prefix to install globally without sudo:
+    ```bash
+    mkdir -p ~/.npm-global
+    npm config set prefix ~/.npm-global
+    echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+    source ~/.bashrc
+    npm install -g simpleclaw@latest
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance Issues
+
+### High Memory Usage
+
+1. Check session count:
+   ```bash
+   simpleclaw sessions list
+   ```
+
+2. Compact old sessions:
+   ```bash
+   simpleclaw sessions compact --all
+   ```
+
+3. Delete unused sessions:
+   ```bash
+   simpleclaw sessions delete <session-key>
+   ```
+
+### High CPU Usage
+
+1. Check for runaway agents:
+   ```bash
+   ps aux | grep simpleclaw
+   ```
+
+2. Review active sessions:
+   ```bash
+   simpleclaw sessions list
+   ```
+
+3. Restart Gateway:
+   ```bash
+   simpleclaw gateway restart
+   ```
+
+## Diagnostic Commands
+
+### Doctor Command
+
+Run comprehensive health check:
+
+```bash
+simpleclaw doctor
+```
+
+This checks:
+- Config validity
+- Channel setup
+- Model configuration
+- DM policy safety
+- Dependency versions
+
+### Status Commands
+
+```bash
+# Gateway status
+simpleclaw gateway status
+
+# Channel status
+simpleclaw channels status --probe
+
+# Agent status
+simpleclaw agents list
+
+# Session status
+simpleclaw sessions list
+```
+
+### Log Commands
+
+```bash
+# Tail all logs
+simpleclaw gateway logs --tail 50 --follow
+
+# Error logs only
+simpleclaw gateway logs --level error
+
+# Filter by channel
+simpleclaw gateway logs | grep -i telegram
+
+# Systemd logs (Linux)
+sudo journalctl -u simpleclaw-gateway -f
+```
+
+## Getting Help
+
+If you're still stuck:
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/clawd">
+    Ask for help in the SimpleClaw Discord
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/simpleclaw/simpleclaw/issues">
+    Report bugs or request features
+  </Card>
+  <Card title="Documentation" icon="book" href="/">
+    Search the full documentation
+  </Card>
+  <Card title="FAQ" icon="question" href="/help/faq">
+    Common questions and answers
+  </Card>
+</CardGroup>
+
+## Debug Mode
+
+Enable verbose logging:
+
+```bash
+# Temporary (current session)
+export SIMPLECLAW_LOG_LEVEL=debug
+simpleclaw gateway run
+
+# Permanent (config)
+simpleclaw config set logging.level '"debug"' --json
+```
+
+## Collecting Debug Information
+
+When reporting issues, include:
+
+```bash
+# Version info
+simpleclaw --version
+node --version
+
+# System info
+uname -a  # Linux/macOS
+
+# Config (redact secrets!)
+simpleclaw config get | jq 'del(.providers, .channels.*.token, .channels.*.apiKey)'
+
+# Recent logs
+simpleclaw gateway logs --tail 100 > debug.log
+
+# Channel status
+simpleclaw channels status --probe > channels.log
+```

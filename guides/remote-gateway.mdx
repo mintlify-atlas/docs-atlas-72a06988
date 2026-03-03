@@ -1,0 +1,487 @@
+---
+title: "Remote Gateway"
+description: "Run SimpleClaw Gateway on a remote server and connect from anywhere"
+---
+
+# Remote Gateway Setup
+
+Run the SimpleClaw Gateway on a remote server (VPS, cloud instance) and connect from your local devices.
+
+## Why Run Remotely?
+
+- **Always-on** - Gateway runs 24/7 without tying up your laptop
+- **Centralized** - One gateway for all your devices
+- **Resource efficient** - Small VPS can handle multiple channels
+- **Device flexibility** - Connect from macOS, iOS, Android, web
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│            Remote Server (VPS)            │
+│                                          │
+│  ┌──────────────────────────────────┐  │
+│  │      SimpleClaw Gateway        │  │
+│  │   ws://127.0.0.1:18789         │  │
+│  │                                  │  │
+│  │  • Channels (Telegram, etc.)   │  │
+│  │  • Agent sessions              │  │
+│  │  • Bash tool execution         │  │
+│  └──────────────────────────────────┘  │
+│                  │                       │
+│        Tailscale / SSH Tunnel          │
+└─────────────────────────────────────────┘
+                  │
+         ┌────────┼────────┐
+         │               │
+    ┌────┴────┐    ┌────┴────┐
+    │ macOS App│    │ iOS App │
+    │  + Nodes │    │ + Nodes │
+    └─────────┘    └─────────┘
+```
+
+## Quick Start
+
+<Steps>
+  <Step title="Provision Server">
+    Recommended specs:
+    - **1-2 CPU cores**
+    - **2GB RAM**
+    - **20GB storage**
+    - **Ubuntu 22.04** or **Debian 12**
+
+    Popular providers: DigitalOcean, Linode, Hetzner, Vultr
+  </Step>
+
+  <Step title="Install SimpleClaw on Server">
+    SSH into your server:
+    ```bash
+    ssh user@your-server.example.com
+    ```
+
+    Install Node.js 22+:
+    ```bash
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    ```
+
+    Install SimpleClaw:
+    ```bash
+    npm install -g simpleclaw@latest
+    ```
+  </Step>
+
+  <Step title="Run Onboarding">
+    ```bash
+    simpleclaw onboard --install-daemon
+    ```
+
+    This will:
+    - Create config directory
+    - Configure Gateway
+    - Set up systemd service (for Linux)
+    - Start the Gateway
+  </Step>
+
+  <Step title="Configure Remote Access">
+    Choose **Tailscale** or **SSH Tunnel** for secure access.
+  </Step>
+</Steps>
+
+## Access Methods
+
+### Option 1: Tailscale (Recommended)
+
+Tailscale provides secure, zero-config networking.
+
+<Steps>
+  <Step title="Install Tailscale on Server">
+    ```bash
+    curl -fsSL https://tailscale.com/install.sh | sh
+    sudo tailscale up
+    ```
+  </Step>
+
+  <Step title="Configure Tailscale Serve">
+    Enable Tailscale Serve for Gateway:
+
+    ```bash
+    simpleclaw config set gateway.tailscale.mode '"serve"' --json
+    simpleclaw config set gateway.bind '"loopback"' --json
+    ```
+
+    The Gateway will be available at:
+    ```
+    https://<hostname>.tailnet.ts.net
+    ```
+  </Step>
+
+  <Step title="Connect from Client">
+    Install Tailscale on your local machine, then:
+
+    ```bash
+    simpleclaw gateway connect --url wss://<hostname>.tailnet.ts.net
+    ```
+
+    Or use in macOS app:
+    1. Open **SimpleClaw Preferences**
+    2. Set **Gateway URL**: `wss://<hostname>.tailnet.ts.net`
+    3. Click **Connect**
+  </Step>
+</Steps>
+
+### Option 2: SSH Tunnel
+
+Use SSH port forwarding for secure access.
+
+<Steps>
+  <Step title="Create SSH Tunnel">
+    On your local machine:
+
+    ```bash
+    ssh -L 18789:127.0.0.1:18789 user@your-server.example.com -N
+    ```
+
+    Keep this terminal open.
+  </Step>
+
+  <Step title="Connect Locally">
+    The Gateway is now available at `ws://127.0.0.1:18789`:
+
+    ```bash
+    simpleclaw agent --message "Hello from remote!"
+    ```
+  </Step>
+
+  <Step title="Persistent Tunnel (Optional)">
+    Set up autossh for automatic reconnection:
+
+    ```bash
+    sudo apt-get install autossh
+    autossh -M 0 -L 18789:127.0.0.1:18789 user@your-server.example.com -N
+    ```
+  </Step>
+</Steps>
+
+### Option 3: Public HTTPS (Advanced)
+
+Expose Gateway with reverse proxy (nginx/caddy) + TLS.
+
+**Security warning:** Only do this with strong authentication enabled.
+
+<Steps>
+  <Step title="Install Caddy">
+    ```bash
+    sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main" | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+    sudo apt update
+    sudo apt install caddy
+    ```
+  </Step>
+
+  <Step title="Configure Caddy">
+    Edit `/etc/caddy/Caddyfile`:
+
+    ```
+    gateway.yourdomain.com {
+      reverse_proxy localhost:18789
+    }
+    ```
+
+    Reload:
+    ```bash
+    sudo systemctl reload caddy
+    ```
+  </Step>
+
+  <Step title="Enable Password Auth">
+    **Required** for public access:
+
+    ```bash
+    simpleclaw config set gateway.auth.mode '"password"' --json
+    simpleclaw config set gateway.auth.password '"your-strong-password"' --json
+    ```
+  </Step>
+
+  <Step title="Connect">
+    ```bash
+    simpleclaw gateway connect --url wss://gateway.yourdomain.com --password your-strong-password
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+### Gateway Bind Settings
+
+```json
+{
+  "gateway": {
+    "bind": "loopback",  // Only bind to 127.0.0.1
+    "port": 18789,
+    "auth": {
+      "mode": "password",
+      "password": "strong-password-here"
+    }
+  }
+}
+```
+
+**Important:** Always use `"loopback"` bind for remote setups. Access via Tailscale/tunnel/reverse proxy.
+
+### Tailscale Configuration
+
+```json
+{
+  "gateway": {
+    "tailscale": {
+      "mode": "serve",        // or "funnel" for public
+      "resetOnExit": true      // Cleanup on shutdown
+    },
+    "auth": {
+      "mode": "tailscale"      // Use Tailscale auth headers
+    }
+  }
+}
+```
+
+## Managing the Gateway
+
+### Systemd Service (Linux)
+
+After `simpleclaw onboard --install-daemon`, the Gateway runs as a systemd service.
+
+```bash
+# Status
+sudo systemctl status simpleclaw-gateway
+
+# Restart
+sudo systemctl restart simpleclaw-gateway
+
+# Stop
+sudo systemctl stop simpleclaw-gateway
+
+# View logs
+sudo journalctl -u simpleclaw-gateway -f
+```
+
+### Manual Start
+
+Run Gateway manually in tmux/screen:
+
+```bash
+tmux new -s gateway
+simpleclaw gateway run --bind loopback --port 18789
+# Detach: Ctrl+B, D
+```
+
+Reattach:
+```bash
+tmux attach -t gateway
+```
+
+## Device Nodes
+
+Device nodes (macOS, iOS, Android) can execute device-specific commands when paired:
+
+<Steps>
+  <Step title="Pair Device from Server">
+    On the server:
+    ```bash
+    simpleclaw nodes pair --platform macos
+    ```
+
+    This displays a QR code or pairing code.
+  </Step>
+
+  <Step title="Scan on Device">
+    - **macOS App:** Preferences → Nodes → Pair Device
+    - **iOS App:** Settings → Pair Device
+    - **Android App:** Settings → Pair Device
+  </Step>
+
+  <Step title="Verify Pairing">
+    ```bash
+    simpleclaw nodes list
+    ```
+
+    You should see your device.
+  </Step>
+</Steps>
+
+### Node Commands
+
+Once paired, the Gateway can invoke device commands:
+
+```bash
+# Camera snapshot (iOS/Android)
+simpleclaw agent --message "Take a photo" --deliver --to whatsapp
+
+# System command (macOS node only)
+simpleclaw agent --message "Run 'sw_vers' on my Mac"
+
+# Screen recording (all platforms)
+simpleclaw agent --message "Record my screen for 10 seconds"
+```
+
+## Security Best Practices
+
+<Warning>
+  Never expose Gateway without authentication. Always use:
+  - Tailscale Serve (recommended)
+  - SSH tunnels
+  - Password auth for public exposure
+</Warning>
+
+### Security Checklist
+
+- [ ] Gateway bind set to `loopback`
+- [ ] Strong password configured if using public access
+- [ ] Firewall rules limit access to port 18789
+- [ ] SSH key-based auth (disable password SSH)
+- [ ] Tailscale ACLs configured
+- [ ] Regular system updates
+- [ ] Channel allowlists configured
+- [ ] DM policy set to `pairing` or `blocked`
+
+## Monitoring
+
+### Health Checks
+
+```bash
+# Gateway status
+simpleclaw gateway status
+
+# Channel health
+simpleclaw channels status --probe
+
+# Resource usage
+top -bn1 | grep simpleclaw
+```
+
+### Log Monitoring
+
+```bash
+# Tail Gateway logs
+simpleclaw gateway logs --tail 100 --follow
+
+# Filter errors
+simpleclaw gateway logs --level error
+
+# Systemd logs
+sudo journalctl -u simpleclaw-gateway --since "1 hour ago"
+```
+
+## Backups
+
+Important directories to back up:
+
+```bash
+# Config and credentials
+~/.simpleclaw/simpleclaw.json
+~/.simpleclaw/credentials/
+
+# Session history
+~/.simpleclaw/agents/*/sessions/
+
+# Skills
+~/.simpleclaw/workspace/skills/
+```
+
+Backup script:
+```bash
+#!/bin/bash
+tar -czf simpleclaw-backup-$(date +%Y%m%d).tar.gz \
+  ~/.simpleclaw/simpleclaw.json \
+  ~/.simpleclaw/credentials \
+  ~/.simpleclaw/agents \
+  ~/.simpleclaw/workspace
+```
+
+## Upgrading
+
+<Steps>
+  <Step title="Upgrade SimpleClaw">
+    ```bash
+    npm install -g simpleclaw@latest
+    ```
+  </Step>
+
+  <Step title="Restart Gateway">
+    ```bash
+    sudo systemctl restart simpleclaw-gateway
+    ```
+  </Step>
+
+  <Step title="Verify">
+    ```bash
+    simpleclaw --version
+    simpleclaw gateway status
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cannot connect to remote Gateway">
+    1. Verify Gateway is running:
+       ```bash
+       ssh user@server "simpleclaw gateway status"
+       ```
+
+    2. Check Tailscale status:
+       ```bash
+       tailscale status
+       ```
+
+    3. Test SSH tunnel:
+       ```bash
+       ssh -L 18789:127.0.0.1:18789 user@server "curl localhost:18789"
+       ```
+  </Accordion>
+
+  <Accordion title="Channels not connecting">
+    1. Check server logs:
+       ```bash
+       ssh user@server "simpleclaw gateway logs --tail 50"
+       ```
+
+    2. Verify channel config:
+       ```bash
+       ssh user@server "simpleclaw config get channels"
+       ```
+
+    3. Test channel authentication:
+       ```bash
+       ssh user@server "simpleclaw channels login --channel telegram"
+       ```
+  </Accordion>
+
+  <Accordion title="High latency">
+    - Use Tailscale for better routing
+    - Check server location (closer is better)
+    - Monitor server resources:
+      ```bash
+      ssh user@server "top"
+      ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Skills" icon="puzzle-piece" href="/guides/custom-skills">
+    Add custom tools to your remote Gateway
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Trigger agent runs from external services
+  </Card>
+  <Card title="Multi-Agent Setup" icon="users" href="/guides/multi-agent-setup">
+    Run multiple specialized agents
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/guides/troubleshooting">
+    Common remote setup issues
+  </Card>
+</CardGroup>

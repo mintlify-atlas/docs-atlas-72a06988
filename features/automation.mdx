@@ -1,0 +1,520 @@
+---
+title: Automation & Scheduling
+description: Cron jobs, webhooks, and automated agent runs in SimpleClaw
+---
+
+SimpleClaw's automation features enable scheduled agent runs, reminders, and webhook integrations through a built-in cron service.
+
+## Overview
+
+The cron service provides:
+
+- **Flexible scheduling** - One-time, recurring, or cron-expression based
+- **Isolated execution** - Each job runs in a dedicated session
+- **Delivery options** - Announce results to channels or trigger webhooks
+- **Wake modes** - Immediate or next-heartbeat execution
+- **Automatic retry** - Failed jobs retry with exponential backoff
+
+## Architecture
+
+Cron jobs are managed by `CronService` (src/cron/service.ts):
+
+```typescript
+class CronService {
+  async start(): Promise<void>;
+  async stop(): Promise<void>;
+  async list(opts?: { includeDisabled?: boolean }): Promise<CronJob[]>;
+  async add(input: CronJobCreate): Promise<CronJob>;
+  async update(id: string, patch: CronJobPatch): Promise<CronJob>;
+  async remove(id: string): Promise<void>;
+  async run(id: string, mode?: "due" | "force"): Promise<void>;
+  wake(opts: { mode: "now" | "next-heartbeat"; text: string });
+}
+```
+
+**Storage:** Jobs persist to `~/.openclaw/cron/jobs.json`
+
+## Job Types
+
+### System Event Jobs
+
+Trigger a system event (no agent turn):
+
+```typescript
+{
+  name: "Daily cleanup",
+  schedule: { kind: "cron", expr: "0 2 * * *" },
+  sessionTarget: "main",
+  wakeMode: "next-heartbeat",
+  payload: {
+    kind: "systemEvent",
+    text: "Run daily cleanup task"
+  }
+}
+```
+
+### Agent Turn Jobs
+
+Run agent with a message and deliver response:
+
+```typescript
+{
+  name: "Morning briefing",
+  schedule: { kind: "cron", expr: "0 8 * * 1-5" },
+  sessionTarget: "isolated",
+  wakeMode: "now",
+  payload: {
+    kind: "agentTurn",
+    message: "What's on my calendar today?",
+    model: "gpt-4o",
+    thinking: "medium",
+    deliver: true,
+    channel: "telegram",
+    to: "@me"
+  }
+}
+```
+
+## Schedule Formats
+
+### One-time (ISO timestamp)
+
+```typescript
+{
+  schedule: {
+    kind: "at",
+    at: "2024-03-15T14:30:00Z"
+  },
+  deleteAfterRun: true  // Auto-delete after execution
+}
+```
+
+### Recurring interval
+
+```typescript
+{
+  schedule: {
+    kind: "every",
+    everyMs: 3600000,  // 1 hour
+    anchorMs: Date.now()  // Optional start time
+  }
+}
+```
+
+### Cron expression
+
+```typescript
+{
+  schedule: {
+    kind: "cron",
+    expr: "0 */6 * * *",  // Every 6 hours
+    tz: "America/New_York",  // Optional timezone
+    staggerMs: 300000  // Optional 5-min stagger window
+  }
+}
+```
+
+**Cron format:** `minute hour day month weekday`
+
+Examples:
+- `0 9 * * 1-5` - 9am weekdays
+- `*/15 * * * *` - Every 15 minutes
+- `0 0 1 * *` - First of month at midnight
+- `30 14 * * 0` - Sundays at 2:30pm
+
+### Staggering
+
+Prevent thundering herd at top-of-hour (src/cron/stagger.ts):
+
+```typescript
+schedule: {
+  kind: "cron",
+  expr: "0 * * * *",  // Top of hour
+  staggerMs: 600000  // Spread over 10 minutes
+}
+// Job runs at random time between :00 and :10
+```
+
+## Session Targets
+
+### Main Session
+
+Runs in the main agent session (shared state with user interactions):
+
+```typescript
+sessionTarget: "main"
+```
+
+**Use case:** Background tasks that should access user's conversation history
+
+### Isolated Session
+
+Runs in a dedicated session (clean slate per job):
+
+```typescript
+sessionTarget: "isolated"
+```
+
+**Use case:** Scheduled reports, recurring queries, independent tasks
+
+## Wake Modes
+
+### Next Heartbeat
+
+Waits for next agent activity before executing:
+
+```typescript
+wakeMode: "next-heartbeat"
+```
+
+**Use case:** Non-urgent tasks, efficiency optimization
+
+### Immediate (Now)
+
+Executes immediately when due:
+
+```typescript
+wakeMode: "now"
+```
+
+**Use case:** Time-sensitive reminders, urgent tasks
+
+## Delivery Options
+
+Control how job results are delivered:
+
+### No delivery
+
+```typescript
+delivery: {
+  mode: "none"
+}
+```
+
+Job runs but output is not sent anywhere.
+
+### Announce to channel
+
+```typescript
+delivery: {
+  mode: "announce",
+  channel: "telegram",  // or "discord", "slack", "last"
+  to: "@username",      // DM
+  bestEffort: true      // Don't fail job if delivery fails
+}
+```
+
+**Channel types:**
+- Specific: `telegram`, `discord`, `slack`, `signal`, etc.
+- `last` - Send to last channel user interacted from
+
+### Webhook
+
+```typescript
+delivery: {
+  mode: "webhook",
+  to: "https://api.example.com/webhook",  // POST request
+  bestEffort: false  // Fail job if webhook fails
+}
+```
+
+Webhook payload:
+```json
+{
+  "jobId": "abc123",
+  "jobName": "Morning briefing",
+  "status": "ok",
+  "summary": "Agent response text...",
+  "sessionId": "session-xyz",
+  "timestamp": 1234567890
+}
+```
+
+## Job State Tracking
+
+Each job maintains execution state (src/cron/types.ts:88):
+
+```typescript
+type CronJobState = {
+  nextRunAtMs?: number;
+  runningAtMs?: number;
+  lastRunAtMs?: number;
+  lastRunStatus?: "ok" | "error" | "skipped";
+  lastError?: string;
+  lastDurationMs?: number;
+  consecutiveErrors?: number;
+  scheduleErrorCount?: number;
+  lastDeliveryStatus?: "delivered" | "not-delivered" | "unknown";
+  lastDeliveryError?: string;
+};
+```
+
+### Error Handling
+
+**Consecutive failures:** Jobs with repeated errors get exponential backoff
+
+**Schedule errors:** Jobs with broken cron expressions auto-disable after threshold
+
+**Delivery failures:** Tracked separately from execution failures
+
+## Usage Examples
+
+### Daily reminder
+
+```bash
+openclaw cron add \
+  --name "Standup reminder" \
+  --schedule "0 9 * * 1-5" \
+  --message "Time for standup meeting!" \
+  --channel telegram \
+  --to @me
+```
+
+### Weekly report
+
+```bash
+openclaw cron add \
+  --name "Weekly summary" \
+  --schedule "0 17 * * 5" \
+  --message "Summarize this week's activity" \
+  --model claude-3-5-sonnet \
+  --channel slack \
+  --to #team-updates
+```
+
+### One-time task
+
+```bash
+openclaw cron add \
+  --name "Future reminder" \
+  --at "2024-03-20T15:00:00Z" \
+  --message "Don't forget the dentist appointment!" \
+  --delete-after-run
+```
+
+### Background maintenance
+
+```bash
+openclaw cron add \
+  --name "Session cleanup" \
+  --schedule "0 3 * * *" \
+  --kind systemEvent \
+  --text "Clean up old sessions" \
+  --no-deliver
+```
+
+## CLI Operations
+
+```bash
+# List jobs
+openclaw cron list
+openclaw cron list --all  # Include disabled
+
+# Show job details
+openclaw cron get <job-id>
+
+# Enable/disable job
+openclaw cron enable <job-id>
+openclaw cron disable <job-id>
+
+# Update job
+openclaw cron update <job-id> \
+  --schedule "0 10 * * *" \
+  --message "Updated message"
+
+# Run job now (force)
+openclaw cron run <job-id> --force
+
+# Delete job
+openclaw cron remove <job-id>
+
+# Service status
+openclaw cron status
+```
+
+## Programmatic API
+
+### Create job
+
+```typescript
+import { CronService } from "simpleclaw/cron";
+
+const cron = new CronService(deps);
+await cron.start();
+
+const job = await cron.add({
+  name: "Test job",
+  enabled: true,
+  schedule: { kind: "every", everyMs: 60000 },
+  sessionTarget: "isolated",
+  wakeMode: "now",
+  payload: {
+    kind: "agentTurn",
+    message: "Hello from cron",
+    deliver: false
+  }
+});
+```
+
+### List jobs
+
+```typescript
+const jobs = await cron.list({ includeDisabled: true });
+
+for (const job of jobs) {
+  console.log(`${job.name}: next run at ${job.state.nextRunAtMs}`);
+}
+```
+
+### Update job
+
+```typescript
+await cron.update(job.id, {
+  enabled: false,
+  payload: {
+    kind: "agentTurn",
+    message: "Updated message"
+  }
+});
+```
+
+### Manual trigger
+
+```typescript
+// Run if due
+await cron.run(job.id, "due");
+
+// Force run now
+await cron.run(job.id, "force");
+```
+
+## Webhook Validation
+
+Webhook URLs are validated before saving (src/cron/webhook-url.ts):
+
+```typescript
+function normalizeHttpWebhookUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  
+  const parsed = new URL(value.trim());
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;  // Only HTTP/HTTPS allowed
+  }
+  
+  return value.trim();
+}
+```
+
+## Storage Format
+
+Jobs are stored in `~/.openclaw/cron/jobs.json`:
+
+```json
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "abc123",
+      "agentId": "main",
+      "sessionKey": "...",
+      "name": "Morning briefing",
+      "description": "Daily calendar summary",
+      "enabled": true,
+      "deleteAfterRun": false,
+      "createdAtMs": 1234567890,
+      "updatedAtMs": 1234567900,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 8 * * 1-5",
+        "tz": "America/New_York"
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "What's on my calendar?",
+        "deliver": true,
+        "channel": "telegram",
+        "to": "@me"
+      },
+      "delivery": {
+        "mode": "announce",
+        "channel": "telegram",
+        "to": "@me",
+        "bestEffort": true
+      },
+      "state": {
+        "nextRunAtMs": 1234570000,
+        "lastRunAtMs": 1234567890,
+        "lastRunStatus": "ok",
+        "lastDurationMs": 1234,
+        "consecutiveErrors": 0,
+        "lastDeliveryStatus": "delivered"
+      }
+    }
+  ]
+}
+```
+
+## Troubleshooting
+
+**Job not running?**
+
+Check if enabled:
+```bash
+openclaw cron get <job-id> | grep enabled
+```
+
+Check schedule errors:
+```bash
+openclaw cron get <job-id> | grep scheduleErrorCount
+```
+
+**Delivery failing?**
+
+Check delivery status:
+```bash
+openclaw cron get <job-id> | grep lastDeliveryStatus
+```
+
+Verify channel is configured:
+```bash
+openclaw channels status
+```
+
+**Webhook not received?**
+
+Test webhook URL:
+```bash
+curl -X POST https://your-webhook.com/path \
+  -H "Content-Type: application/json" \
+  -d '{"test": true}'
+```
+
+**Timezone issues?**
+
+Verify timezone:
+```bash
+date
+timedatectl
+```
+
+Set explicit timezone in schedule:
+```typescript
+schedule: {
+  kind: "cron",
+  expr: "0 9 * * *",
+  tz: "America/Los_Angeles"
+}
+```
+
+## API Reference
+
+Key files in `src/cron/`:
+
+- `service.ts` - Main CronService class (src/cron/service.ts:7)
+- `types.ts` - Job types and interfaces (src/cron/types.ts:1)
+- `schedule.ts` - Schedule parsing and calculation
+- `isolated-agent.ts` - Isolated session execution
+- `delivery.ts` - Result delivery logic
+- `webhook-url.ts` - Webhook validation (src/cron/webhook-url.ts:5)

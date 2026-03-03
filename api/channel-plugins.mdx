@@ -1,0 +1,443 @@
+---
+title: "Channel Plugins"
+description: "Build custom messaging platform integrations"
+---
+
+# Channel Plugins
+
+Channel plugins integrate messaging platforms (Discord, Slack, WhatsApp, etc.) with SimpleClaw's Gateway.
+
+## Channel Plugin Interface
+
+A channel plugin implements the `ChannelPlugin` interface with adapters for different aspects:
+
+```typescript
+import type { ChannelPlugin } from "simpleclaw/plugin-sdk";
+
+export interface ChannelPlugin<ResolvedAccount = any, Probe = unknown, Audit = unknown> {
+  id: string;                          // Unique channel ID
+  meta: ChannelMeta;                   // Display info
+  capabilities: ChannelCapabilities;   // Feature flags
+  
+  // Required adapters
+  config: ChannelConfigAdapter;
+  
+  // Optional adapters
+  onboarding?: ChannelOnboardingAdapter;
+  setup?: ChannelSetupAdapter;
+  pairing?: ChannelPairingAdapter;
+  security?: ChannelSecurityAdapter;
+  groups?: ChannelGroupAdapter;
+  mentions?: ChannelMentionAdapter;
+  outbound?: ChannelOutboundAdapter;
+  status?: ChannelStatusAdapter;
+  gateway?: ChannelGatewayAdapter;
+  auth?: ChannelAuthAdapter;
+  streaming?: ChannelStreamingAdapter;
+  threading?: ChannelThreadingAdapter;
+  messaging?: ChannelMessagingAdapter;
+  directory?: ChannelDirectoryAdapter;
+  resolver?: ChannelResolverAdapter;
+  actions?: ChannelMessageActionAdapter;
+  heartbeat?: ChannelHeartbeatAdapter;
+  agentTools?: ChannelAgentToolFactory | ChannelAgentTool[];
+}
+```
+
+## Core Components
+
+### Meta and Capabilities
+
+```typescript
+const myChannel: ChannelPlugin = {
+  id: "mychannel",
+  
+  meta: {
+    label: "MyChannel",
+    detailLabel: "MyChannel messaging",
+    systemImage: "message.circle.fill",  // SF Symbol
+  },
+  
+  capabilities: {
+    outbound: true,      // Can send messages
+    groups: true,        // Supports group chats
+    threads: true,       // Supports threaded replies
+    reactions: true,     // Can add emoji reactions
+    media: ["image", "video", "audio", "document"],
+    streaming: false,    // Streaming message updates
+    voiceCall: false,    // Voice calling support
+  },
+};
+```
+
+### Config Adapter
+
+Manages account configuration:
+
+```typescript
+import type { ChannelConfigAdapter } from "simpleclaw/plugin-sdk";
+import { z } from "zod";
+
+const AccountConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  apiKey: z.string(),
+  webhookSecret: z.string().optional(),
+  allowFrom: z.array(z.string()).default([]),
+});
+
+type ResolvedAccount = z.infer<typeof AccountConfigSchema> & {
+  accountId: string;
+};
+
+const config: ChannelConfigAdapter<ResolvedAccount> = {
+  // List all account IDs from config
+  listAccountIds(config) {
+    return Object.keys(config.channels?.mychannel?.accounts || {});
+  },
+  
+  // Get default account ID
+  resolveDefaultAccountId(config) {
+    return "default";
+  },
+  
+  // Resolve account config
+  resolveAccount(config, accountId) {
+    const accounts = config.channels?.mychannel?.accounts || {};
+    const account = accounts[accountId];
+    
+    if (!account) {
+      throw new Error(`Account ${accountId} not found`);
+    }
+    
+    return {
+      accountId,
+      ...account,
+    };
+  },
+};
+```
+
+### Outbound Adapter
+
+Sends messages to the platform:
+
+```typescript
+import type { ChannelOutboundAdapter } from "simpleclaw/plugin-sdk";
+
+const outbound: ChannelOutboundAdapter = {
+  async send(ctx, message) {
+    const { account } = ctx;
+    const { to, text, media, threadId } = message;
+    
+    // Send text message
+    if (text) {
+      await platformApi.sendMessage({
+        apiKey: account.apiKey,
+        chatId: to,
+        text,
+        threadId,
+      });
+    }
+    
+    // Send media attachments
+    if (media?.length) {
+      for (const item of media) {
+        await platformApi.sendMedia({
+          apiKey: account.apiKey,
+          chatId: to,
+          url: item.url,
+          mime: item.mime,
+          caption: item.caption,
+          threadId,
+        });
+      }
+    }
+  },
+  
+  async sendReaction(ctx, params) {
+    await platformApi.react({
+      apiKey: ctx.account.apiKey,
+      messageId: params.messageId,
+      emoji: params.emoji,
+    });
+  },
+  
+  async updateMessage(ctx, params) {
+    await platformApi.editMessage({
+      apiKey: ctx.account.apiKey,
+      messageId: params.messageId,
+      newText: params.text,
+    });
+  },
+};
+```
+
+### Gateway Adapter
+
+Handles incoming messages:
+
+```typescript
+import type { ChannelGatewayAdapter } from "simpleclaw/plugin-sdk";
+
+const gateway: ChannelGatewayAdapter = {
+  async start(ctx) {
+    const { account, logger, handleInbound } = ctx;
+    
+    // Initialize platform client
+    const client = createPlatformClient({
+      apiKey: account.apiKey,
+      webhookSecret: account.webhookSecret,
+    });
+    
+    // Listen for messages
+    client.on("message", async (msg) => {
+      await handleInbound({
+        from: msg.sender.id,
+        text: msg.text,
+        timestamp: msg.timestamp,
+        messageId: msg.id,
+        threadId: msg.threadId,
+        media: msg.attachments?.map(att => ({
+          url: att.url,
+          mime: att.mimeType,
+          size: att.size,
+        })),
+      });
+    });
+    
+    // Listen for reactions
+    client.on("reaction", async (reaction) => {
+      logger.info("Reaction received", { reaction });
+    });
+    
+    await client.connect();
+    
+    // Store client for cleanup
+    ctx.state.client = client;
+  },
+  
+  async stop(ctx) {
+    await ctx.state.client?.disconnect();
+  },
+};
+```
+
+### Security Adapter
+
+Access control and DM policy:
+
+```typescript
+import type { ChannelSecurityAdapter } from "simpleclaw/plugin-sdk";
+import { isNormalizedSenderAllowed } from "simpleclaw/plugin-sdk";
+
+const security: ChannelSecurityAdapter = {
+  resolveSenderAllowed(ctx, sender) {
+    const { account } = ctx;
+    const allowFrom = account.allowFrom || [];
+    
+    // Check if sender is in allowlist
+    return isNormalizedSenderAllowed({
+      senderId: sender.id,
+      senderName: sender.name,
+      allowFrom,
+    });
+  },
+  
+  resolveDmPolicy(ctx) {
+    // Return DM policy: "open", "pairing", or "blocked"
+    return ctx.account.dmPolicy || "pairing";
+  },
+  
+  resolveGroupPolicy(ctx, groupId) {
+    const groups = ctx.account.groups || {};
+    const groupConfig = groups[groupId] || groups["*"];
+    
+    return {
+      allowed: !!groupConfig,
+      requireMention: groupConfig?.requireMention ?? true,
+    };
+  },
+};
+```
+
+### Status Adapter
+
+Health monitoring:
+
+```typescript
+import type { ChannelStatusAdapter } from "simpleclaw/plugin-sdk";
+import { buildBaseAccountStatusSnapshot } from "simpleclaw/plugin-sdk";
+
+const status: ChannelStatusAdapter = {
+  async buildAccountSnapshot(ctx, accountId) {
+    const account = ctx.resolveAccount(accountId);
+    const state = ctx.getState(accountId);
+    
+    return buildBaseAccountStatusSnapshot({
+      accountId,
+      enabled: account.enabled,
+      configured: !!account.apiKey,
+      connected: state.connected,
+      running: state.running,
+      lastError: state.lastError?.message,
+      lastConnectedAt: state.lastConnectedAt,
+    });
+  },
+  
+  async probe(ctx, accountId) {
+    // Perform active health check
+    try {
+      const response = await platformApi.getMe({
+        apiKey: ctx.account.apiKey,
+      });
+      
+      return {
+        ok: true,
+        user: response.username,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error.message,
+      };
+    }
+  },
+};
+```
+
+### Pairing Adapter
+
+DM pairing flow:
+
+```typescript
+import type { ChannelPairingAdapter } from "simpleclaw/plugin-sdk";
+
+const pairing: ChannelPairingAdapter = {
+  async requestPairing(ctx, params) {
+    const code = generatePairingCode();
+    
+    // Send pairing code to user
+    await platformApi.sendMessage({
+      apiKey: ctx.account.apiKey,
+      chatId: params.peerId,
+      text: `Your pairing code: ${code}\n\nRun: simpleclaw pairing approve mychannel ${code}`,
+    });
+    
+    return {
+      code,
+      expiresAt: Date.now() + 300000, // 5 minutes
+    };
+  },
+  
+  async approvePairing(ctx, params) {
+    // Add to allowlist
+    await ctx.updateConfig((config) => {
+      const allowFrom = config.channels.mychannel.accounts[ctx.accountId].allowFrom || [];
+      allowFrom.push(params.peerId);
+      return config;
+    });
+  },
+};
+```
+
+## Advanced Features
+
+### Threading Support
+
+```typescript
+import type { ChannelThreadingAdapter } from "simpleclaw/plugin-sdk";
+
+const threading: ChannelThreadingAdapter = {
+  resolveThreadId(ctx, message) {
+    // Extract thread ID from message
+    return message.threadId || message.replyToMessageId;
+  },
+  
+  formatThreadReply(ctx, params) {
+    return {
+      threadId: params.threadId,
+      replyToMessageId: params.messageId,
+    };
+  },
+};
+```
+
+### Message Actions
+
+```typescript
+import type { ChannelMessageActionAdapter } from "simpleclaw/plugin-sdk";
+
+const actions: ChannelMessageActionAdapter = {
+  listActions(ctx) {
+    return [
+      {
+        id: "retry",
+        label: "Retry",
+        icon: "arrow.clockwise",
+      },
+      {
+        id: "edit",
+        label: "Edit",
+        icon: "pencil",
+      },
+    ];
+  },
+  
+  async handleAction(ctx, params) {
+    if (params.actionId === "retry") {
+      await ctx.handleInbound({
+        from: params.message.from,
+        text: params.message.text,
+      });
+    }
+  },
+};
+```
+
+## Plugin Configuration Schema
+
+```typescript
+import { buildChannelConfigSchema } from "simpleclaw/plugin-sdk";
+import { z } from "zod";
+
+const schema = buildChannelConfigSchema({
+  schema: {
+    enabled: z.boolean().default(false),
+    accounts: z.record(
+      z.object({
+        apiKey: z.string(),
+        webhookSecret: z.string().optional(),
+        allowFrom: z.array(z.string()).default([]),
+        dmPolicy: z.enum(["open", "pairing", "blocked"]).default("pairing"),
+      })
+    ),
+  },
+  
+  uiHints: {
+    "enabled": {
+      label: "Enable MyChannel",
+      help: "Connect to MyChannel messaging",
+    },
+    "accounts.*.apiKey": {
+      label: "API Key",
+      sensitive: true,
+      help: "Get this from MyChannel dashboard",
+    },
+    "accounts.*.dmPolicy": {
+      label: "DM Policy",
+      help: "How to handle direct messages from unknown senders",
+    },
+  },
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Provider Plugins" icon="server" href="/api/provider-plugins">
+    Build LLM and tool provider plugins
+  </Card>
+  <Card title="Plugin SDK" icon="puzzle-piece" href="/api/plugin-sdk">
+    Complete SDK reference
+  </Card>
+</CardGroup>

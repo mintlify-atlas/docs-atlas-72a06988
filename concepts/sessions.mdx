@@ -1,0 +1,403 @@
+---
+title: Sessions
+description: Session management, persistence, and conversation history
+---
+
+SimpleClaw **sessions** store conversation history, context, and state for each agent interaction. Sessions are persisted to disk and cached in memory for fast access.
+
+## Session Basics
+
+Each session includes:
+- **Session Key** - Unique identifier (e.g., `agent:main:discord:default:channel:123`)
+- **Transcript** - Full conversation history with tool calls and responses
+- **Delivery Context** - Where to send replies (channel, thread, recipient)
+- **Metadata** - Created/updated timestamps, message counts, model usage
+- **Model Overrides** - Session-specific model preferences
+
+```typescript
+// src/config/sessions/types.ts
+export type SessionEntry = {
+  key: string;                    // Session identifier
+  agentId: string;                // Which agent owns this session
+  channel?: string;               // Messaging channel
+  lastChannel?: string;           // Last active channel
+  lastTo?: string;                // Last recipient
+  lastAccountId?: string;         // Last bot account used
+  lastThreadId?: string;          // Last thread ID
+  deliveryContext?: DeliveryContext;  // Current delivery target
+  createdAt?: string;             // ISO timestamp
+  updatedAt?: string;             // ISO timestamp
+  messageCount?: number;          // Total messages in session
+  model?: string | ModelConfig;   // Model override
+  origin?: Origin;                // Original message context
+};
+```
+
+## Session Storage
+
+Sessions are stored at `~/.simpleclaw/sessions/` (configurable via `SIMPLECLAW_STATE_DIR`):
+
+```plaintext
+~/.simpleclaw/sessions/
+├── sessions.json              # Session metadata index
+└── transcripts/
+    ├── agent_main_main.jsonl  # Main session transcript
+    ├── agent_main_discord_default_channel_123.jsonl
+    └── agent_support_telegram_default_direct_456.jsonl
+```
+
+### Session Store Cache
+
+The session store is cached in memory with TTL-based invalidation:
+
+```typescript
+// src/config/sessions/store.ts
+const SESSION_STORE_CACHE = new Map<string, SessionStoreCacheEntry>();
+const DEFAULT_SESSION_STORE_TTL_MS = 45_000; // 45 seconds
+
+type SessionStoreCacheEntry = {
+  store: Record<string, SessionEntry>;
+  loadedAt: number;
+  storePath: string;
+  mtimeMs?: number;
+};
+```
+
+Cache behavior:
+- **TTL** - Cache entries expire after 45 seconds (configurable via `SIMPLECLAW_SESSION_CACHE_TTL_MS`)
+- **mtime checking** - Detects external file modifications
+- **Automatic invalidation** - Stale entries are reloaded on next access
+
+<Info>
+  Set `SIMPLECLAW_SESSION_CACHE_TTL_MS=0` to disable caching for debugging, or increase to reduce disk I/O.
+</Info>
+
+## Session Lifecycle
+
+<Steps>
+  <Step title="Session Creation">
+    First message to a new session key creates session entry in `sessions.json`
+  </Step>
+  
+  <Step title="Transcript Initialization">
+    New `.jsonl` transcript file created in `transcripts/` directory
+  </Step>
+  
+  <Step title="Message Appending">
+    Each message, tool call, and response appended to transcript
+  </Step>
+  
+  <Step title="Metadata Updates">
+    Session metadata (updatedAt, messageCount) updated after each interaction
+  </Step>
+  
+  <Step title="Session Archival">
+    Old transcripts archived based on retention policy (optional)
+  </Step>
+  
+  <Step title="Session Deletion">
+    Manual deletion or automatic pruning removes session and transcript
+  </Step>
+</Steps>
+
+## Session Management
+
+### List Sessions
+
+```bash
+# List all sessions
+simpleclaw sessions list
+
+# List sessions for specific agent
+simpleclaw sessions list --agent main
+
+# Show detailed session info
+simpleclaw sessions list --verbose
+```
+
+### View Session Details
+
+```bash
+# Get session info
+simpleclaw sessions get agent:main:discord:default:channel:123
+
+# View conversation history
+simpleclaw sessions history agent:main:main
+```
+
+### Reset Session
+
+```bash
+# Clear conversation history
+simpleclaw sessions reset agent:main:main
+
+# Reset all sessions for an agent
+simpleclaw sessions reset --agent support --all
+```
+
+## Delivery Context
+
+Delivery context determines where replies are sent:
+
+```typescript
+export type DeliveryContext = {
+  channel?: string;      // "discord", "telegram", etc.
+  to?: string;          // Recipient ID
+  accountId?: string;   // Bot account to use
+  threadId?: string;    // Thread/conversation ID
+  replyToId?: string;   // Message ID to reply to
+};
+```
+
+Delivery context is updated automatically:
+- When messages arrive from new channels
+- When replying in threads
+- When switching between accounts
+
+```yaml
+# Normalize and merge delivery context
+deliveryContext:
+  channel: discord
+  to: "123456789"
+  accountId: default
+  threadId: "thread-abc-123"
+```
+
+## Session Maintenance
+
+SimpleClaw includes automatic session maintenance:
+
+### Disk Budget Enforcement
+
+Limit total session storage size:
+
+```yaml
+session:
+  maintenance:
+    mode: auto
+    diskBudget: 10GB  # Maximum total session storage
+    archiveOldest: true
+```
+
+When budget is exceeded:
+1. Oldest sessions are identified
+2. Transcripts are compressed and archived
+3. Original `.jsonl` files are removed
+
+```typescript
+// src/config/sessions/disk-budget.ts
+export async function enforceSessionDiskBudget(params: {
+  storeDir: string;
+  budgetBytes: number;
+  dryRun?: boolean;
+}): Promise<SessionDiskBudgetSweepResult> {
+  // Calculate current usage
+  const usage = await calculateSessionStorageUsage(params.storeDir);
+  
+  if (usage.totalBytes <= params.budgetBytes) {
+    return { swept: [], bytesFreed: 0 };
+  }
+  
+  // Archive oldest transcripts until under budget
+  const toSweep = selectTranscriptsForSweep(usage, params.budgetBytes);
+  return archiveTranscripts(toSweep);
+}
+```
+
+### Retention Policies
+
+Automatic cleanup of old sessions:
+
+```yaml
+session:
+  maintenance:
+    mode: auto
+    retention:
+      maxAge: 90d        # Delete sessions older than 90 days
+      maxInactive: 30d   # Delete sessions inactive for 30 days
+      keepMinimum: 10    # Always keep at least 10 most recent sessions
+```
+
+### Manual Maintenance
+
+```bash
+# Archive old transcripts
+simpleclaw sessions archive --older-than 30d
+
+# Cleanup archived sessions
+simpleclaw sessions cleanup --archived
+
+# Prune sessions by criteria
+simpleclaw sessions prune --inactive 60d --keep 5
+```
+
+## Session Locking
+
+Session writes are synchronized to prevent corruption:
+
+```typescript
+// src/agents/session-write-lock.ts
+import { acquireSessionWriteLock } from "./session-write-lock.js";
+
+const release = await acquireSessionWriteLock(sessionKey);
+try {
+  // Perform writes to session
+  await updateSessionEntry(sessionKey, updates);
+  await appendToTranscript(sessionKey, message);
+} finally {
+  release();  // Always release lock
+}
+```
+
+<Warning>
+  Never manually edit session files while the gateway is running. Use the CLI or WebSocket API to modify sessions safely.
+</Warning>
+
+## Session Metadata
+
+Metadata is derived from session content and usage:
+
+```typescript
+// src/config/sessions/metadata.ts
+export function deriveSessionMetaPatch(
+  entry: SessionEntry
+): Partial<SessionEntry> {
+  return {
+    updatedAt: new Date().toISOString(),
+    messageCount: (entry.messageCount ?? 0) + 1,
+    // ... additional computed fields
+  };
+}
+```
+
+## Model Overrides
+
+Override models per session:
+
+```yaml
+# In session entry
+sessions:
+  "agent:main:discord:123":
+    model:
+      primary: gpt-4o
+      fallbacks:
+        - claude-3-7-sonnet-20250219
+```
+
+Or via CLI:
+
+```bash
+# Set session model
+simpleclaw sessions update agent:main:main --model claude-3-7-sonnet-20250219
+
+# Clear model override (use agent's default)
+simpleclaw sessions update agent:main:main --model default
+```
+
+## Transcript Format
+
+Transcripts are stored as **JSON Lines** (`.jsonl`):
+
+```jsonl
+{"role":"user","content":"Hello!","timestamp":"2026-03-03T10:00:00Z"}
+{"role":"assistant","content":"Hi! How can I help?","timestamp":"2026-03-03T10:00:02Z"}
+{"role":"user","content":"What's the weather?","timestamp":"2026-03-03T10:00:10Z"}
+{"role":"tool","tool":"web-search","args":{"query":"weather"},"timestamp":"2026-03-03T10:00:11Z"}
+{"role":"tool-result","result":"Sunny, 72°F","timestamp":"2026-03-03T10:00:12Z"}
+{"role":"assistant","content":"It's sunny and 72°F!","timestamp":"2026-03-03T10:00:13Z"}
+```
+
+Each line is a complete JSON object representing one message/event.
+
+## Configuration
+
+<ParamField path="session.dmScope" type="string" default="main">
+  DM session isolation: `main`, `per-peer`, `per-channel-peer`, `per-account-channel-peer`
+</ParamField>
+
+<ParamField path="session.identityLinks" type="object">
+  Map of identity email to platform identifiers for cross-platform session merging
+</ParamField>
+
+<ParamField path="session.maintenance.mode" type="string" default="auto">
+  Maintenance mode: `auto`, `manual`, or `disabled`
+</ParamField>
+
+<ParamField path="session.maintenance.diskBudget" type="string">
+  Maximum disk space for sessions (e.g., `10GB`, `500MB`)
+</ParamField>
+
+<ParamField path="session.maintenance.retention.maxAge" type="string">
+  Delete sessions older than this duration (e.g., `90d`, `6mo`)
+</ParamField>
+
+<ParamField path="session.maintenance.retention.maxInactive" type="string">
+  Delete sessions inactive for this duration (e.g., `30d`)
+</ParamField>
+
+## Gateway API
+
+### List Sessions
+
+```typescript
+const sessions = await gateway.call("sessions.list", {
+  agentId: "main",  // Optional: filter by agent
+  limit: 50,        // Optional: max results
+  offset: 0         // Optional: pagination
+});
+```
+
+### Get Session
+
+```typescript
+const session = await gateway.call("sessions.get", {
+  sessionKey: "agent:main:main"
+});
+```
+
+### Reset Session
+
+```typescript
+await gateway.call("sessions.reset", {
+  sessionKey: "agent:main:discord:default:channel:123"
+});
+```
+
+### Send to Session
+
+```typescript
+await gateway.call("sessions.send", {
+  sessionKey: "agent:support:telegram:default:direct:456",
+  message: "Following up on your ticket..."
+});
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Regular Maintenance" icon="broom">
+    Enable automatic maintenance or schedule manual cleanup to prevent disk bloat
+  </Card>
+  
+  <Card title="Descriptive Keys" icon="key">
+    Session keys should clearly identify the conversation context
+  </Card>
+  
+  <Card title="Backup Important Sessions" icon="floppy-disk">
+    Export critical session transcripts before resetting or pruning
+  </Card>
+  
+  <Card title="Monitor Disk Usage" icon="hard-drive">
+    Keep an eye on session storage size, especially for high-volume bots
+  </Card>
+</CardGroup>
+
+<Tip>
+  Use `dmScope: per-channel-peer` for customer support scenarios to keep each user's conversation isolated and searchable.
+</Tip>
+
+## Related Topics
+
+- [Routing](/concepts/routing) - How session keys are generated
+- [Agents](/concepts/agents) - Multi-agent session management
+- [Gateway](/concepts/gateway) - Session lifecycle in the gateway

@@ -1,0 +1,471 @@
+---
+title: "Protocol Reference"
+description: "Complete schema reference for SimpleClaw Gateway protocol"
+---
+
+# Protocol Reference
+
+Complete reference for all SimpleClaw Gateway WebSocket protocol types, methods, and events.
+
+## Protocol Version
+
+Current protocol version: **1**
+
+Clients specify supported range in `ConnectParams`:
+
+```json
+{
+  "minProtocol": 1,
+  "maxProtocol": 1
+}
+```
+
+## Base Types
+
+### ConnectParams
+
+Client hello message (first frame sent):
+
+```typescript
+interface ConnectParams {
+  minProtocol: number;  // Minimum protocol version supported
+  maxProtocol: number;  // Maximum protocol version supported
+  client: {
+    id: string;         // Client type: "web-ui", "macos-app", "cli", etc.
+    displayName?: string;
+    version: string;    // Client version
+    platform: string;   // "macos", "web", "ios", "android", "linux"
+    deviceFamily?: string;
+    modelIdentifier?: string;
+    mode: "interactive" | "node" | "headless";
+    instanceId?: string;
+  };
+  caps?: string[];      // Client capabilities
+  commands?: string[];  // Supported commands (for node mode)
+  permissions?: Record<string, boolean>;
+  pathEnv?: string;
+  role?: string;
+  scopes?: string[];
+  device?: {            // Device pairing auth
+    id: string;
+    publicKey: string;
+    signature: string;
+    signedAt: number;
+    nonce: string;
+  };
+  auth?: {
+    token?: string;
+    deviceToken?: string;
+    password?: string;
+  };
+  locale?: string;
+  userAgent?: string;
+}
+```
+
+### HelloOk
+
+Server hello response:
+
+```typescript
+interface HelloOk {
+  type: "hello-ok";
+  protocol: number;     // Negotiated protocol version
+  server: {
+    version: string;
+    connId: string;
+  };
+  features: {
+    methods: string[];  // Available methods
+    events: string[];   // Available events
+  };
+  snapshot: Snapshot;   // Initial state snapshot
+  canvasHostUrl?: string;
+  auth?: {
+    deviceToken: string;
+    role: string;
+    scopes: string[];
+    issuedAtMs?: number;
+  };
+  policy: {
+    maxPayload: number;
+    maxBufferedBytes: number;
+    tickIntervalMs: number;
+  };
+}
+```
+
+### Snapshot
+
+Gateway state snapshot:
+
+```typescript
+interface Snapshot {
+  agents: AgentSummary[];
+  channels: Record<string, unknown>;
+  presence: PresenceEntry[];
+  stateVersion: StateVersion;
+}
+```
+
+## Agent Methods
+
+### agent.identity
+
+Get agent identity and configuration:
+
+<ParamField path="params" type="object">
+  <ParamField path="agentId" type="string">
+    Agent ID (default: "main")
+  </ParamField>
+</ParamField>
+
+**Response:**
+
+```typescript
+interface AgentIdentityResult {
+  agentId: string;
+  model: string;
+  workspace?: string;
+  identity?: string;
+}
+```
+
+### agents.list
+
+List all agents:
+
+<ParamField path="params" type="object">
+  <ParamField path="includeFiles" type="boolean">
+    Include workspace files (default: false)
+  </ParamField>
+</ParamField>
+
+**Response:**
+
+```typescript
+interface AgentsListResult {
+  agents: AgentSummary[];
+}
+
+interface AgentSummary {
+  id: string;
+  name?: string;
+  model?: string;
+  workspace?: string;
+  enabled?: boolean;
+}
+```
+
+### agents.create
+
+Create a new agent:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="id" type="string" required>
+    Unique agent ID
+  </ParamField>
+  <ParamField path="name" type="string">
+    Display name
+  </ParamField>
+  <ParamField path="model" type="string">
+    Model identifier
+  </ParamField>
+  <ParamField path="workspace" type="string">
+    Workspace path
+  </ParamField>
+</ParamField>
+
+### agents.update
+
+Update agent configuration:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="id" type="string" required>
+    Agent ID
+  </ParamField>
+  <ParamField path="model" type="string">
+    New model
+  </ParamField>
+  <ParamField path="name" type="string">
+    New display name
+  </ParamField>
+</ParamField>
+
+## Session Methods
+
+### sessions.list
+
+List active sessions:
+
+<ParamField path="params" type="object">
+  <ParamField path="agentId" type="string">
+    Filter by agent ID
+  </ParamField>
+  <ParamField path="limit" type="number">
+    Max sessions to return
+  </ParamField>
+</ParamField>
+
+**Response:**
+
+```typescript
+interface SessionsListResult {
+  sessions: {
+    sessionKey: string;
+    agentId: string;
+    model: string;
+    thinkingLevel?: string;
+    lastActivityAt?: number;
+    messageCount?: number;
+  }[];
+}
+```
+
+### sessions.patch
+
+Update session configuration:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="sessionKey" type="string" required>
+    Session key
+  </ParamField>
+  <ParamField path="model" type="string">
+    Change model
+  </ParamField>
+  <ParamField path="thinkingLevel" type="string">
+    Change thinking level
+  </ParamField>
+  <ParamField path="verboseLevel" type="string">
+    Change verbose level
+  </ParamField>
+</ParamField>
+
+### sessions.reset
+
+Clear session history:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="sessionKey" type="string" required>
+    Session key to reset
+  </ParamField>
+</ParamField>
+
+## Channel Methods
+
+### channels.status
+
+Get channel status for all configured channels:
+
+<ParamField path="params" type="object">
+  <ParamField path="probe" type="boolean">
+    Perform active probes (default: false)
+  </ParamField>
+  <ParamField path="timeoutMs" type="number">
+    Probe timeout in milliseconds
+  </ParamField>
+</ParamField>
+
+**Response:**
+
+```typescript
+interface ChannelsStatusResult {
+  ts: number;
+  channelOrder: string[];
+  channelLabels: Record<string, string>;
+  channels: Record<string, unknown>;
+  channelAccounts: Record<string, ChannelAccountSnapshot[]>;
+  channelDefaultAccountId: Record<string, string>;
+}
+
+interface ChannelAccountSnapshot {
+  accountId: string;
+  name?: string;
+  enabled?: boolean;
+  configured?: boolean;
+  linked?: boolean;
+  running?: boolean;
+  connected?: boolean;
+  lastConnectedAt?: number;
+  lastError?: string;
+}
+```
+
+### channels.logout
+
+Disconnect and clear channel credentials:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="channel" type="string" required>
+    Channel ID (e.g., "whatsapp", "telegram")
+  </ParamField>
+  <ParamField path="accountId" type="string">
+    Account ID (default: default account)
+  </ParamField>
+</ParamField>
+
+## Configuration Methods
+
+### config.get
+
+Read configuration value:
+
+<ParamField path="params" type="object">
+  <ParamField path="path" type="string">
+    Config key path (e.g., "agent.model")
+  </ParamField>
+</ParamField>
+
+### config.set
+
+Set configuration value:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="path" type="string" required>
+    Config key path
+  </ParamField>
+  <ParamField path="value" type="unknown" required>
+    New value
+  </ParamField>
+</ParamField>
+
+### config.patch
+
+Partially update configuration:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="patches" type="object[]" required>
+    Array of config patches
+  </ParamField>
+</ParamField>
+
+## Cron Methods
+
+### cron.list
+
+List scheduled jobs:
+
+<ParamField path="params" type="object">
+  <ParamField path="agentId" type="string">
+    Filter by agent
+  </ParamField>
+</ParamField>
+
+### cron.add
+
+Schedule a new job:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="schedule" type="string" required>
+    Cron expression
+  </ParamField>
+  <ParamField path="message" type="string" required>
+    Job message/prompt
+  </ParamField>
+  <ParamField path="name" type="string">
+    Job name
+  </ParamField>
+  <ParamField path="agentId" type="string">
+    Target agent
+  </ParamField>
+</ParamField>
+
+### cron.remove
+
+Delete a scheduled job:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="id" type="string" required>
+    Job ID
+  </ParamField>
+</ParamField>
+
+## Node Methods
+
+### node.list
+
+List paired device nodes:
+
+**Response:**
+
+```typescript
+interface NodeListResult {
+  nodes: {
+    id: string;
+    name: string;
+    platform: string;
+    capabilities: string[];
+    permissions: Record<string, boolean>;
+    online: boolean;
+  }[];
+}
+```
+
+### node.invoke
+
+Execute command on a device node:
+
+<ParamField path="params" type="object" required>
+  <ParamField path="nodeId" type="string" required>
+    Target node ID
+  </ParamField>
+  <ParamField path="command" type="string" required>
+    Command name (e.g., "camera.snap")
+  </ParamField>
+  <ParamField path="args" type="object">
+    Command arguments
+  </ParamField>
+</ParamField>
+
+## Events
+
+### `chat` Event
+
+Conversation updates:
+
+```typescript
+interface ChatEvent {
+  sessionKey: string;
+  role: "user" | "assistant" | "system";
+  text?: string;
+  tool?: string;
+  toolInput?: unknown;
+  thinking?: string;
+  done?: boolean;
+  model?: string;
+}
+```
+
+### `agent` Event
+
+Agent state changes:
+
+```typescript
+interface AgentEvent {
+  agentId: string;
+  model?: string;
+  thinkingLevel?: string;
+  verboseLevel?: string;
+}
+```
+
+### `tick` Event
+
+Heartbeat:
+
+```typescript
+interface TickEvent {
+  ts: number;
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="WebSocket Guide" icon="plug" href="/api/websocket">
+    Connection flow and client implementation
+  </Card>
+  <Card title="Plugin SDK" icon="puzzle-piece" href="/api/plugin-sdk">
+    Build custom plugins
+  </Card>
+</CardGroup>

@@ -1,0 +1,425 @@
+---
+title: Models
+description: LLM provider configuration, model selection, and compatibility settings
+---
+
+SimpleClaw supports **multiple LLM providers** (Anthropic, OpenAI, Google, Bedrock, etc.) with flexible model configuration, automatic fallbacks, and provider-specific compatibility settings.
+
+## Model Providers
+
+Providers are configured in `~/.simpleclaw/config.yaml`:
+
+```yaml
+models:
+  mode: merge  # or "replace"
+  providers:
+    anthropic:
+      baseUrl: https://api.anthropic.com/v1
+      apiKey: ${ANTHROPIC_API_KEY}
+      models:
+        - id: claude-3-7-sonnet-20250219
+          name: Claude 3.7 Sonnet
+          reasoning: false
+          input: [text, image]
+          contextWindow: 200000
+          maxTokens: 8192
+          cost:
+            input: 3.00    # per million tokens
+            output: 15.00
+            cacheRead: 0.30
+            cacheWrite: 3.75
+            
+    openai:
+      baseUrl: https://api.openai.com/v1
+      apiKey: ${OPENAI_API_KEY}
+      models:
+        - id: gpt-4o
+          name: GPT-4 Omni
+          reasoning: false
+          input: [text, image]
+          contextWindow: 128000
+          maxTokens: 16384
+          cost:
+            input: 2.50
+            output: 10.00
+            cacheRead: 1.25
+            cacheWrite: 5.00
+```
+
+## Model Configuration
+
+### Model Definition
+
+```typescript
+// src/config/types.models.ts
+export type ModelDefinitionConfig = {
+  id: string;                    // Unique model identifier
+  name: string;                  // Display name
+  api?: ModelApi;                // API type override
+  reasoning: boolean;            // Supports reasoning/thinking
+  input: Array<"text" | "image">; // Input modalities
+  cost: {
+    input: number;               // Cost per million input tokens
+    output: number;              // Cost per million output tokens
+    cacheRead: number;           // Cache read cost
+    cacheWrite: number;          // Cache write cost
+  };
+  contextWindow: number;         // Maximum context length
+  maxTokens: number;             // Maximum completion tokens
+  headers?: Record<string, string>;  // Custom HTTP headers
+  compat?: ModelCompatConfig;    // Compatibility settings
+};
+```
+
+### Supported APIs
+
+```typescript
+export type ModelApi =
+  | "openai-completions"     // Legacy OpenAI completions
+  | "openai-responses"       // OpenAI chat completions
+  | "anthropic-messages"     // Anthropic Messages API
+  | "google-generative-ai"  // Google Gemini
+  | "github-copilot"        // GitHub Copilot
+  | "bedrock-converse-stream" // AWS Bedrock
+  | "ollama";                // Ollama local models
+```
+
+## Provider Authentication
+
+### API Keys (Default)
+
+Most providers use API key authentication:
+
+```yaml
+models:
+  providers:
+    anthropic:
+      apiKey: ${ANTHROPIC_API_KEY}
+      auth: api-key  # default
+```
+
+### AWS SDK (Bedrock)
+
+Bedrock uses AWS credentials:
+
+```yaml
+models:
+  providers:
+    bedrock:
+      baseUrl: https://bedrock-runtime.us-east-1.amazonaws.com
+      auth: aws-sdk
+      bedrockDiscovery:
+        enabled: true
+        region: us-east-1
+        providerFilter:
+          - anthropic
+          - meta
+```
+
+### OAuth (Future)
+
+OAuth-based authentication:
+
+```yaml
+models:
+  providers:
+    custom-provider:
+      auth: oauth
+      oauthConfig:
+        clientId: ${CLIENT_ID}
+        clientSecret: ${CLIENT_SECRET}
+        tokenUrl: https://auth.example.com/token
+```
+
+## Model Compatibility
+
+Different models support different features:
+
+```yaml
+models:
+  providers:
+    anthropic:
+      models:
+        - id: claude-3-7-sonnet-20250219
+          compat:
+            supportsStore: true              # Supports prompt caching
+            supportsDeveloperRole: true      # Supports "developer" role
+            supportsReasoningEffort: false   # No reasoning effort control
+            supportsUsageInStreaming: true   # Returns usage in streams
+            supportsStrictMode: false        # No strict schema mode
+            maxTokensField: max_tokens       # Token limit field name
+            thinkingFormat: openai           # Thinking block format
+```
+
+### Compatibility Flags
+
+<ParamField path="supportsStore" type="boolean">
+  Model supports prompt caching (Anthropic, OpenAI with caching)
+</ParamField>
+
+<ParamField path="supportsDeveloperRole" type="boolean">
+  Model supports "developer" role for system instructions
+</ParamField>
+
+<ParamField path="supportsReasoningEffort" type="boolean">
+  Model supports reasoning effort control (OpenAI o1, o3)
+</ParamField>
+
+<ParamField path="maxTokensField" type="string">
+  Field name for max tokens: `max_tokens` or `max_completion_tokens`
+</ParamField>
+
+<ParamField path="thinkingFormat" type="string">
+  Thinking block format: `openai`, `zai`, or `qwen`
+</ParamField>
+
+<ParamField path="requiresToolResultName" type="boolean">
+  Tool results must include tool name (some OpenAI-compatible providers)
+</ParamField>
+
+<ParamField path="requiresAssistantAfterToolResult" type="boolean">
+  Assistant message required after tool results (some providers)
+</ParamField>
+
+## Model Selection
+
+### Agent Model Configuration
+
+Agents can specify primary + fallback models:
+
+```yaml
+agents:
+  list:
+    - id: main
+      model:
+        primary: claude-3-7-sonnet-20250219
+        fallbacks:
+          - gpt-4o
+          - claude-3-5-sonnet-20241022
+```
+
+```typescript
+// src/config/zod-schema.agent-model.ts
+export const AgentModelSchema = z.union([
+  z.string(),  // Simple: just model ID
+  z.object({
+    primary: z.string().optional(),
+    fallbacks: z.array(z.string()).optional(),
+  }).strict(),
+]);
+```
+
+### Model Fallback Logic
+
+Automatic fallback on:
+- **429 Rate Limit** - Provider rate limit exceeded
+- **401 Unauthorized** - Invalid or expired API key
+- **503 Service Unavailable** - Provider outage
+- **Model Not Found** - Model no longer available
+
+```typescript
+// Fallback resolution (simplified)
+const resolvedModel = await tryModels([
+  config.model.primary,
+  ...config.model.fallbacks
+]);
+```
+
+## Bedrock Discovery
+
+Automatic AWS Bedrock model discovery:
+
+```yaml
+models:
+  bedrockDiscovery:
+    enabled: true
+    region: us-east-1
+    providerFilter:
+      - anthropic      # Only Anthropic models
+      - meta           # And Meta models
+    refreshInterval: 3600  # Refresh every hour (seconds)
+    defaultContextWindow: 200000
+    defaultMaxTokens: 8192
+```
+
+Bedrock discovery automatically:
+1. Lists available foundation models in the region
+2. Filters by provider (if specified)
+3. Creates model definitions with default settings
+4. Refreshes periodically to detect new models
+
+## Custom Headers
+
+Add custom headers to provider requests:
+
+```yaml
+models:
+  providers:
+    custom:
+      baseUrl: https://api.custom.com/v1
+      apiKey: ${CUSTOM_API_KEY}
+      headers:
+        X-Custom-Header: custom-value
+        X-Request-ID: ${REQUEST_ID}
+      models:
+        - id: custom-model
+          headers:
+            X-Model-Specific: only-for-this-model
+```
+
+## Model Catalog
+
+The gateway builds a unified model catalog from all providers:
+
+```typescript
+// src/gateway/server-model-catalog.ts
+export async function loadGatewayModelCatalog(
+  cfg: SimpleClawConfig
+): Promise<ModelCatalog> {
+  const providers = Object.entries(cfg.models?.providers ?? {});
+  const catalog: ModelCatalog = {};
+  
+  for (const [providerId, config] of providers) {
+    for (const model of config.models) {
+      catalog[model.id] = {
+        ...model,
+        providerId,
+        baseUrl: config.baseUrl,
+        auth: config.auth ?? "api-key"
+      };
+    }
+  }
+  
+  return catalog;
+}
+```
+
+## Cost Tracking
+
+Model costs are tracked for usage analysis:
+
+```typescript
+// Calculate request cost
+const inputCost = (inputTokens / 1_000_000) * model.cost.input;
+const outputCost = (outputTokens / 1_000_000) * model.cost.output;
+const cacheReadCost = (cacheReadTokens / 1_000_000) * model.cost.cacheRead;
+const totalCost = inputCost + outputCost + cacheReadCost;
+```
+
+View usage:
+
+```bash
+# Show cost breakdown
+simpleclaw usage --breakdown
+
+# Filter by agent
+simpleclaw usage --agent main
+
+# Date range
+simpleclaw usage --from 2026-03-01 --to 2026-03-31
+```
+
+## Configuration Modes
+
+### Merge Mode (Default)
+
+Merge custom providers with built-in defaults:
+
+```yaml
+models:
+  mode: merge  # Combine with built-in providers
+  providers:
+    openai:
+      models:
+        - id: gpt-4o  # Overrides built-in definition
+```
+
+### Replace Mode
+
+Replace all built-in providers:
+
+```yaml
+models:
+  mode: replace  # Only use custom providers
+  providers:
+    custom:
+      baseUrl: https://api.custom.com/v1
+      # ... custom provider config only
+```
+
+## Local Models (Ollama)
+
+Run local models via Ollama:
+
+```yaml
+models:
+  providers:
+    ollama:
+      baseUrl: http://localhost:11434
+      api: ollama
+      models:
+        - id: llama3:70b
+          name: Llama 3 70B
+          reasoning: false
+          input: [text]
+          contextWindow: 8192
+          maxTokens: 4096
+          cost:
+            input: 0.0
+            output: 0.0
+            cacheRead: 0.0
+            cacheWrite: 0.0
+```
+
+<Tip>
+  Local models have zero cost but require running Ollama locally. Great for development and privacy-sensitive use cases.
+</Tip>
+
+## Model Override Hierarchy
+
+Model selection follows this priority:
+
+1. **Session Override** - Per-session model setting
+2. **Agent Model** - Agent's configured model
+3. **Channel Default** - Channel-specific model preference
+4. **Global Default** - Fallback to first available model
+
+```yaml
+# Channel-specific models
+channels:
+  modelByChannel:
+    discord:
+      default: claude-3-7-sonnet-20250219
+    telegram:
+      default: gpt-4o-mini
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Fallbacks" icon="parachute-box">
+    Always configure fallback models to handle provider outages
+  </Card>
+  
+  <Card title="Cost Awareness" icon="dollar-sign">
+    Use expensive models (GPT-4, Claude Opus) only when necessary
+  </Card>
+  
+  <Card title="Environment Variables" icon="key">
+    Store API keys in environment variables, never hardcode them
+  </Card>
+  
+  <Card title="Model-Specific Compat" icon="puzzle-piece">
+    Set compatibility flags correctly to avoid runtime errors
+  </Card>
+</CardGroup>
+
+<Warning>
+  Changing model configuration requires gateway reload: `simpleclaw gateway reload`
+</Warning>
+
+## Related Topics
+
+- [Agents](/concepts/agents) - Agent model configuration
+- [Sessions](/concepts/sessions) - Session-level model overrides
+- [Gateway](/concepts/gateway) - Model catalog loading

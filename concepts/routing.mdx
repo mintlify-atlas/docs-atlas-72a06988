@@ -1,0 +1,420 @@
+---
+title: Routing
+description: Message routing logic for directing conversations to the right agent
+---
+
+SimpleClaw's **routing system** determines which agent handles each incoming message based on channel, account, peer identity, and custom bindings.
+
+## Routing Fundamentals
+
+When a message arrives, the gateway resolves:
+1. **Agent ID** - Which agent will handle this message
+2. **Session Key** - Unique identifier for conversation persistence
+3. **Match Reason** - How the routing decision was made (for debugging)
+
+```typescript
+// src/routing/resolve-route.ts
+export type ResolvedAgentRoute = {
+  agentId: string;           // "main", "support", etc.
+  channel: string;           // "discord", "telegram", etc.
+  accountId: string;         // User/bot account identifier
+  sessionKey: string;        // "agent:main:discord:123456:channel:general"
+  mainSessionKey: string;    // "agent:main:main"
+  matchedBy: "binding.peer" | "binding.guild" | "default";
+};
+```
+
+## Routing Hierarchy
+
+The router checks bindings in **precedence order**:
+
+<Steps>
+  <Step title="Peer Binding">
+    Exact match on peer (user, channel, or group)
+  </Step>
+  
+  <Step title="Parent Peer Binding">
+    Match on thread's parent channel (for Discord/Slack threads)
+  </Step>
+  
+  <Step title="Guild + Roles">
+    Match on Discord server + user roles
+  </Step>
+  
+  <Step title="Guild">
+    Match on Discord server (without role requirements)
+  </Step>
+  
+  <Step title="Team">
+    Match on Slack workspace or team
+  </Step>
+  
+  <Step title="Account">
+    Match on account ID (bot or user account)
+  </Step>
+  
+  <Step title="Channel">
+    Match on messaging platform (e.g., all Discord messages)
+  </Step>
+  
+  <Step title="Default">
+    Use default agent when no bindings match
+  </Step>
+</Steps>
+
+## Bindings Configuration
+
+Bindings route messages to specific agents:
+
+```yaml
+# ~/.simpleclaw/config.yaml
+bindings:
+  # Route specific Discord channel to support agent
+  - match:
+      channel: discord
+      peer:
+        kind: channel
+        id: "1234567890"  # Discord channel ID
+    agentId: support
+    
+  # Route DMs on Telegram to personal agent
+  - match:
+      channel: telegram
+      peer:
+        kind: direct
+        id: "*"  # Any direct message
+    agentId: personal
+    
+  # Route by Discord server and roles
+  - match:
+      channel: discord
+      guildId: "9876543210"
+      roles:
+        - "admin"
+        - "moderator"
+    agentId: moderation
+    
+  # Route entire Slack workspace
+  - match:
+      channel: slack
+      teamId: "T01234567"
+    agentId: team-assistant
+```
+
+## Peer Types
+
+The `peer.kind` field specifies conversation context:
+
+<ParamField path="direct" type="peer type">
+  One-on-one direct messages
+</ParamField>
+
+<ParamField path="channel" type="peer type">
+  Public/private channels or groups
+</ParamField>
+
+<ParamField path="thread" type="peer type">
+  Threaded conversations (Discord, Slack)
+</ParamField>
+
+<ParamField path="group" type="peer type">
+  Group chats (WhatsApp, Telegram)
+</ParamField>
+
+## Session Keys
+
+Session keys uniquely identify conversations and determine where history is stored.
+
+### Session Key Format
+
+```plaintext
+agent:<agentId>:<channel>:<accountId>:<peerKind>:<peerId>
+
+Examples:
+agent:main:main                                    # Default/main session
+agent:main:discord:987654321:channel:123456789    # Discord channel
+agent:support:telegram:555:direct:111222333       # Telegram DM
+agent:main:slack:T012:thread:C123-T456           # Slack thread
+```
+
+### Session Scopes
+
+Control how DM sessions are isolated:
+
+```yaml
+session:
+  dmScope: main  # Options: main, per-peer, per-channel-peer, per-account-channel-peer
+```
+
+<Accordion title="DM Scope Options">
+  - **main** - All DMs across all channels share one session (default)
+  - **per-peer** - Each person gets their own session (across channels)
+  - **per-channel-peer** - Each person per channel gets a session
+  - **per-account-channel-peer** - Each person per account per channel
+</Accordion>
+
+```typescript
+// src/routing/session-key.ts
+export function buildAgentPeerSessionKey(params: {
+  agentId: string;
+  channel: string;
+  accountId?: string | null;
+  peerKind?: ChatType | null;
+  peerId?: string | null;
+  dmScope?: "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
+}): string {
+  const peerKind = params.peerKind ?? "direct";
+  if (peerKind === "direct") {
+    const dmScope = params.dmScope ?? "main";
+    const peerId = (params.peerId ?? "").trim().toLowerCase();
+    
+    if (dmScope === "per-account-channel-peer" && peerId) {
+      const channel = (params.channel ?? "").trim().toLowerCase();
+      const accountId = normalizeAccountId(params.accountId);
+      return `agent:${agentId}:${channel}:${accountId}:direct:${peerId}`;
+    }
+    // ... other scopes
+  }
+  // ... channel/group/thread logic
+}
+```
+
+### Identity Links
+
+Merge sessions across platforms by linking identities:
+
+```yaml
+session:
+  identityLinks:
+    user@example.com:
+      - discord:123456789
+      - telegram:987654321
+      - slack:U01234567
+```
+
+Messages from any of these identities will use the **same session**.
+
+## Account Resolution
+
+The `accountId` identifies which bot/user account is handling the message:
+
+```typescript
+// Default account ID when not specified
+export const DEFAULT_ACCOUNT_ID = "default";
+
+export function normalizeAccountId(
+  value: string | undefined | null
+): string {
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed.toLowerCase() : DEFAULT_ACCOUNT_ID;
+}
+```
+
+## Routing Algorithm
+
+The routing resolver evaluates bindings in tiers:
+
+```typescript
+// src/routing/resolve-route.ts (simplified)
+export function resolveAgentRoute(
+  input: ResolveAgentRouteInput
+): ResolvedAgentRoute {
+  const bindings = getEvaluatedBindingsForChannelAccount(
+    input.cfg,
+    input.channel,
+    input.accountId
+  );
+  
+  // Try each tier in order
+  for (const tier of tiers) {
+    if (!tier.enabled) continue;
+    
+    const matched = bindings.find((candidate) =>
+      tier.predicate(candidate) &&
+      matchesBindingScope(candidate.match, tier.scope)
+    );
+    
+    if (matched) {
+      return buildRoute(matched.binding.agentId, tier.matchedBy);
+    }
+  }
+  
+  // Fallback to default agent
+  return buildRoute(resolveDefaultAgentId(cfg), "default");
+}
+```
+
+## Binding Match Patterns
+
+### Wildcard Account
+
+Match all accounts on a channel:
+
+```yaml
+bindings:
+  - match:
+      channel: discord
+      accountId: "*"  # Any account
+    agentId: discord-agent
+```
+
+### Specific Account
+
+Match a specific bot account:
+
+```yaml
+bindings:
+  - match:
+      channel: telegram
+      accountId: "bot123456"
+    agentId: telegram-bot-1
+```
+
+### Guild + Role-Based
+
+Route based on Discord roles:
+
+```yaml
+bindings:
+  - match:
+      channel: discord
+      guildId: "987654321"
+      roles:
+        - "premium"
+        - "vip"
+    agentId: premium-support
+```
+
+<Info>
+  Role matching uses OR logic—if the user has ANY of the listed roles, the binding matches.
+</Info>
+
+### Thread Inheritance
+
+Threads can inherit bindings from parent channels:
+
+```yaml
+bindings:
+  # Parent channel binding
+  - match:
+      channel: discord
+      peer:
+        kind: channel
+        id: "123456789"
+    agentId: support
+
+# Threads in this channel automatically route to "support" agent
+```
+
+## Debugging Routing
+
+Enable verbose logging to see routing decisions:
+
+```bash
+SIMPLECLAW_LOG_VERBOSE=1 simpleclaw gateway run
+```
+
+Logs show:
+```plaintext
+[routing] resolveAgentRoute: channel=discord accountId=default peer=channel:123456789
+[routing] binding: agentId=support peer=channel:123456789
+[routing] match: matchedBy=binding.peer agentId=support
+```
+
+## Session Key Utilities
+
+### Parsing Session Keys
+
+```typescript
+import { parseAgentSessionKey } from "@simpleclaw/routing";
+
+const parsed = parseAgentSessionKey("agent:main:discord:default:channel:123");
+// {
+//   agentId: "main",
+//   rest: "discord:default:channel:123"
+// }
+```
+
+### Normalizing Agent IDs
+
+```typescript
+import { normalizeAgentId } from "@simpleclaw/routing";
+
+normalizeAgentId("Support Agent");  // "support-agent"
+normalizeAgentId("MAIN");           // "main"
+normalizeAgentId("");               // "main" (default)
+```
+
+## Advanced Patterns
+
+### Multi-Bot Setup
+
+Run multiple bots with different agents:
+
+```yaml
+bindings:
+  # Production bot
+  - match:
+      channel: discord
+      accountId: "prod-bot"
+    agentId: production
+    
+  # Development bot
+  - match:
+      channel: discord
+      accountId: "dev-bot"
+    agentId: development
+```
+
+### Contextual Routing
+
+Different agents for different contexts:
+
+```yaml
+bindings:
+  # Technical support channel
+  - match:
+      channel: discord
+      peer:
+        kind: channel
+        id: "tech-support-123"
+    agentId: tech-specialist
+    
+  # General questions channel
+  - match:
+      channel: discord
+      peer:
+        kind: channel
+        id: "general-456"
+    agentId: general-assistant
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Specific First" icon="bullseye">
+    Order bindings from most specific to least specific for predictable routing
+  </Card>
+  
+  <Card title="Session Scope" icon="diagram-project">
+    Use `per-channel-peer` for isolated conversations, `main` for unified context
+  </Card>
+  
+  <Card title="Identity Links" icon="link">
+    Link user identities across platforms to maintain conversation continuity
+  </Card>
+  
+  <Card title="Debug Logging" icon="bug">
+    Enable verbose logging when troubleshooting unexpected routing behavior
+  </Card>
+</CardGroup>
+
+<Warning>
+  Changing session scope or identity links creates new sessions—existing conversation history won't automatically migrate.
+</Warning>
+
+## Related Topics
+
+- [Agents](/concepts/agents) - Multi-agent configuration
+- [Sessions](/concepts/sessions) - Session persistence and management
+- [Gateway](/concepts/gateway) - Gateway architecture

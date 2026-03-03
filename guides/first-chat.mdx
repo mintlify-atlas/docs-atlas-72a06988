@@ -1,0 +1,302 @@
+---
+title: "First Chat"
+description: "Send your first message and interact with SimpleClaw"
+---
+
+# Your First Chat with SimpleClaw
+
+This guide walks you through sending your first message to SimpleClaw and understanding the conversation flow.
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Gateway Running" icon="server">
+    Gateway must be running on port 18789
+  </Card>
+  <Card title="Model Configured" icon="brain">
+    At least one LLM provider configured
+  </Card>
+</CardGroup>
+
+<Steps>
+  <Step title="Verify Gateway is Running">
+    Check that the Gateway is accessible:
+
+    ```bash
+    simpleclaw gateway status
+    ```
+
+    You should see:
+    ```
+    Gateway running at ws://127.0.0.1:18789
+    ```
+
+    If not running, start it:
+    ```bash
+    simpleclaw gateway run --bind loopback --port 18789
+    ```
+  </Step>
+
+  <Step title="Check Model Configuration">
+    Verify your model is configured:
+
+    ```bash
+    simpleclaw config get agent.model
+    ```
+
+    If not set, configure a model:
+    ```bash
+    simpleclaw config set agent.model '"anthropic/claude-opus-4-6"' --json
+    ```
+  </Step>
+
+  <Step title="Send Your First Message (CLI)">
+    Use the CLI to send a message directly:
+
+    ```bash
+    simpleclaw agent --message "Hello! What can you help me with?"
+    ```
+
+    The agent will respond in your terminal with streaming output.
+  </Step>
+
+  <Step title="Send via Channel (Optional)">
+    If you have a channel configured (e.g., WhatsApp, Telegram), send a message through that platform:
+
+    **WhatsApp:**
+    - Open WhatsApp and message your configured number
+    - Type: "Hello!"
+
+    **Telegram:**
+    - Open your bot in Telegram
+    - Type: "/start" then "Hello!"
+
+    **Discord:**
+    - DM your bot or mention it in a channel
+    - Type: "@YourBot Hello!"
+  </Step>
+</Steps>
+
+## Understanding the Response
+
+When you send a message, SimpleClaw:
+
+1. **Routes the message** to the appropriate agent based on channel, account, and peer
+2. **Creates or resumes a session** - persistent conversation context
+3. **Streams the response** - you see thinking and output in real-time
+4. **Executes tools** - the agent can use bash, browser, and custom tools
+5. **Delivers back** - response sent to the same channel you messaged from
+
+### CLI Output Example
+
+```
+┌─ Agent Response ───────────────────────────────────────┐
+│ Session: main                                          │
+│ Model: anthropic/claude-opus-4-6                       │
+│ Thinking: medium                                       │
+└────────────────────────────────────────────────────────┘
+
+Hello! I'm SimpleClaw, your personal AI assistant. I can help you with:
+
+• Running commands and automating tasks
+• Browsing the web and gathering information
+• Managing your calendar and reminders
+• Writing code and analyzing data
+• Controlling your devices (when connected as nodes)
+• And much more!
+
+What would you like to work on today?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tokens: 142 (prompt: 45, completion: 97)
+Cost: $0.0021
+```
+
+## Next Steps
+
+### Try Tool Usage
+
+Ask the agent to use tools:
+
+```bash
+simpleclaw agent --message "What's the current time and date?"
+```
+
+The agent will use the `bash` tool to run `date`.
+
+### Multi-turn Conversation
+
+Messages in the same session maintain context:
+
+```bash
+# First message
+simpleclaw agent --message "Remember that my favorite color is blue"
+
+# Second message (in same session)
+simpleclaw agent --message "What's my favorite color?"
+```
+
+### Adjust Thinking Level
+
+Control how much internal reasoning the agent shows:
+
+```bash
+# Minimal thinking
+simpleclaw agent --message "Hello" --thinking minimal
+
+# High thinking (detailed reasoning)
+simpleclaw agent --message "Solve this problem: ..." --thinking high
+```
+
+## Common Commands
+
+### Session Management
+
+View active sessions:
+```bash
+simpleclaw sessions list
+```
+
+Reset a session (clear history):
+```bash
+simpleclaw sessions reset main
+```
+
+View session history:
+```bash
+simpleclaw sessions history main
+```
+
+### Chat Commands
+
+When chatting via a channel (WhatsApp, Telegram, etc.), you can use these commands:
+
+- `/status` - Show session info (model, tokens, cost)
+- `/new` or `/reset` - Clear conversation history
+- `/think <level>` - Change thinking level (off, minimal, low, medium, high, xhigh)
+- `/verbose on|off` - Toggle verbose output
+- `/model <name>` - Switch models
+
+### Example Conversation Flow
+
+```
+You: Hello! Can you help me write a Python script?
+
+Assistant: Of course! I'd be happy to help you write a Python script.
+What would you like the script to do?
+
+You: Read a CSV file and calculate the average of the 'price' column
+
+Assistant: I'll write a Python script that reads a CSV and calculates
+the average price. Here's the code:
+
+[Code output with explanation]
+
+Would you like me to add error handling or any other features?
+
+You: /status
+
+Session: main
+Model: anthropic/claude-opus-4-6
+Messages: 4
+Tokens: 1,247 (prompt: 892, completion: 355)
+Cost: $0.0187
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Gateway not responding">
+    Check if the Gateway is running:
+    ```bash
+    ps aux | grep simpleclaw-gateway
+    ```
+
+    View Gateway logs:
+    ```bash
+    simpleclaw gateway logs --tail 50
+    ```
+
+    Restart the Gateway:
+    ```bash
+    simpleclaw gateway restart
+    ```
+  </Accordion>
+
+  <Accordion title="Model errors or API failures">
+    Verify your API keys are configured:
+    ```bash
+    simpleclaw config get providers
+    ```
+
+    Check provider authentication:
+    ```bash
+    simpleclaw login --provider anthropic
+    ```
+
+    View detailed error logs:
+    ```bash
+    simpleclaw gateway logs --level error
+    ```
+  </Accordion>
+
+  <Accordion title="Channel not receiving messages">
+    Check channel status:
+    ```bash
+    simpleclaw channels status --probe
+    ```
+
+    Verify channel configuration:
+    ```bash
+    simpleclaw config get channels.whatsapp
+    ```
+
+    Re-authenticate channel:
+    ```bash
+    simpleclaw channels login --channel whatsapp
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Usage
+
+### Custom Session Keys
+
+Use custom session keys for isolated conversations:
+
+```bash
+simpleclaw agent --message "Hello" --session-key "work:project-alpha"
+```
+
+### Deliver to Different Channel
+
+Send response to a specific channel:
+
+```bash
+simpleclaw agent --message "Send summary" --deliver --channel telegram --to @username
+```
+
+### Non-interactive Mode
+
+Get a single response without streaming:
+
+```bash
+simpleclaw agent --message "Quick question" --no-stream
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Add Channels" icon="comments" href="/guides/adding-channels">
+    Connect WhatsApp, Telegram, Discord, and more
+  </Card>
+  <Card title="Multi-Agent Setup" icon="users" href="/guides/multi-agent-setup">
+    Create specialized agents for different tasks
+  </Card>
+  <Card title="Custom Skills" icon="puzzle-piece" href="/guides/custom-skills">
+    Extend agent capabilities with custom tools
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/guides/troubleshooting">
+    Common issues and solutions
+  </Card>
+</CardGroup>

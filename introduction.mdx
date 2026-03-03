@@ -1,0 +1,154 @@
+---
+title: Introduction to SimpleClaw
+description: A personal AI assistant that connects to your messaging channels with voice, canvas, and multi-agent capabilities
+---
+
+# Welcome to SimpleClaw
+
+SimpleClaw is a **personal AI assistant** you run on your own devices. It answers you on the channels you already use—WhatsApp, Telegram, Slack, Discord, and more—with powerful features like voice interaction, live canvas, and browser control.
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/quickstart">
+    Install SimpleClaw and have your first chat in under 5 minutes
+  </Card>
+  <Card title="Messaging Channels" icon="messages" href="/channels/overview">
+    Connect WhatsApp, Telegram, Discord, Slack, Signal, and more
+  </Card>
+  <Card title="Voice & Canvas" icon="microphone" href="/features/voice">
+    Always-on speech for macOS, iOS, and Android with live visual workspace
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/gateway">
+    Complete command-line interface documentation
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion title="Multi-channel Messaging Gateway">
+    Connect to WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, iMessage, Microsoft Teams, Matrix, Zalo, and more. All channels route through a single WebSocket gateway that manages sessions, presence, and message delivery.
+  </Accordion>
+
+  <Accordion title="Multi-agent Routing">
+    Route messages to isolated agents with separate workspaces and sessions. Configure routing by channel, account, peer, or guild with precedence chains for flexible control.
+  </Accordion>
+
+  <Accordion title="Voice Wake and Talk Mode">
+    Always-on speech interaction for macOS, iOS, and Android. Use voice wake for hands-free activation and talk mode for continuous conversation with ElevenLabs integration.
+  </Accordion>
+
+  <Accordion title="Live Canvas with A2UI">
+    Agent-driven visual workspace with A2UI (Agent-to-UI) for pushing dynamic content, evaluating code, and taking snapshots. Available on macOS, iOS, and Android.
+  </Accordion>
+
+  <Accordion title="Browser Control">
+    Dedicated SimpleClaw-managed Chrome/Chromium with CDP (Chrome DevTools Protocol) control for snapshots, actions, uploads, and profile management.
+  </Accordion>
+
+  <Accordion title="Native Apps">
+    macOS menu bar app, iOS app, and Android app for seamless integration with your devices. Apps support canvas, voice, camera, screen recording, and more.
+  </Accordion>
+
+  <Accordion title="Automation">
+    Built-in cron jobs, webhooks, and Gmail Pub/Sub integration for scheduled tasks and event-driven workflows.
+  </Accordion>
+
+  <Accordion title="Skills Platform">
+    Bundled, managed, and workspace skills with install gating and UI integration for extending capabilities.
+  </Accordion>
+
+  <Accordion title="Security First">
+    DM pairing system with allowlists ensures only approved contacts can reach your assistant. Run `simpleclaw doctor` to check security configuration.
+  </Accordion>
+
+  <Accordion title="Local-first Gateway">
+    Single WebSocket control plane at ws://127.0.0.1:18789 manages all sessions, channels, tools, and events locally on your device.
+  </Accordion>
+</AccordionGroup>
+
+## Architecture Overview
+
+SimpleClaw consists of several key components:
+
+```
+WhatsApp / Telegram / Slack / Discord / Signal / iMessage / ...
+               │
+               ▼
+┌───────────────────────────────┐
+│          Gateway              │
+│       (control plane)         │
+│    ws://127.0.0.1:18789       │
+└──────────────┬────────────────┘
+               │
+               ├─ Pi agent (RPC)
+               ├─ CLI (simpleclaw ...)
+               ├─ WebChat UI
+               ├─ macOS app
+               └─ iOS / Android nodes
+```
+
+### Gateway
+
+The **Gateway** is a local WebSocket server that:
+- Manages connections to messaging channels
+- Routes inbound messages to AI agents
+- Handles session storage and presence
+- Executes scheduled tasks (cron jobs)
+- Serves the Control UI and WebChat
+- Coordinates with device nodes for local actions
+
+### Agents
+
+Each **Agent** has:
+- Isolated workspace directory
+- Independent model configuration
+- Separate session storage
+- Custom skills and tools
+- Routing rules for channel/account/peer
+
+### Channels
+
+Supported messaging platforms:
+- **WhatsApp** (Baileys)
+- **Telegram** (grammY)
+- **Discord** (discord.js)
+- **Slack** (Bolt)
+- **Signal** (signal-cli)
+- **iMessage** (BlueBubbles or legacy)
+- **Microsoft Teams**, **Matrix**, **Zalo** (extensions)
+- **WebChat** (built-in web interface)
+
+## Next Steps
+
+<Steps>
+  <Step title="Install SimpleClaw">
+    Follow the [Installation Guide](/installation) to get SimpleClaw running on your system.
+  </Step>
+  
+  <Step title="Run the Quickstart">
+    Complete the [Quickstart](/quickstart) to have your first chat in under 5 minutes.
+  </Step>
+  
+  <Step title="Add Channels">
+    Connect your messaging platforms with the [Channels Guide](/guides/adding-channels).
+  </Step>
+  
+  <Step title="Explore Features">
+    Try [Voice](/features/voice), [Canvas](/features/canvas), and [Browser Control](/features/browser).
+  </Step>
+</Steps>
+
+## Requirements
+
+- **Node.js**: Version 22 or higher
+- **Operating System**: macOS, Linux, or Windows (via WSL2)
+- **Package Manager**: npm, pnpm, or bun
+
+## Community
+
+- **GitHub**: [asundar43/simpleclaw](https://github.com/asundar43/simpleclaw)
+- **License**: MIT
+
+<Info>
+SimpleClaw is based on OpenClaw, a personal AI assistant gateway. It follows the same architecture and conventions while providing a streamlined experience.
+</Info>

@@ -1,0 +1,144 @@
+---
+title: "Config CLI"
+description: "Non-interactive config helpers (get/set/unset) and setup wizard"
+---
+
+The `config` command provides both a setup wizard (when run without subcommands) and direct get/set/unset operations for configuration values.
+
+## config (wizard)
+
+Run the interactive setup wizard for credentials, channels, gateway, and agent defaults. This is an alias for the `configure` command.
+
+```bash
+simpleclaw config
+```
+
+<ParamField path="--section" type="string">
+  Configure wizard sections (repeatable). Use with no subcommand.
+</ParamField>
+
+## config get
+
+Get a config value by dot path.
+
+```bash
+simpleclaw config get <path>
+```
+
+<ParamField path="path" type="string" required>
+  Config path (dot or bracket notation)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+### Examples
+
+```bash
+# Get gateway mode
+simpleclaw config get gateway.mode
+
+# Get nested value with bracket notation
+simpleclaw config get gateway.auth.token
+
+# Output as JSON
+simpleclaw config get gateway --json
+```
+
+## config set
+
+Set a config value by dot path.
+
+```bash
+simpleclaw config set <path> <value>
+```
+
+<ParamField path="path" type="string" required>
+  Config path (dot or bracket notation)
+</ParamField>
+
+<ParamField path="value" type="string" required>
+  Value (JSON5 or raw string)
+</ParamField>
+
+<ParamField path="--strict-json" type="boolean">
+  Strict JSON5 parsing (error instead of raw string fallback)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Legacy alias for `--strict-json`
+</ParamField>
+
+### Examples
+
+```bash
+# Set gateway mode to local
+simpleclaw config set gateway.mode local
+
+# Set a numeric value
+simpleclaw config set gateway.port 8080
+
+# Set a boolean value
+simpleclaw config set gateway.auth.enabled true
+
+# Set a JSON object (use quotes to preserve structure)
+simpleclaw config set gateway.auth '{"mode": "token", "token": "abc123"}'
+
+# Set an array value
+simpleclaw config set channels.allowlist '["telegram", "discord"]'
+```
+
+### Path Notation
+
+The config path supports both dot notation and bracket notation:
+
+- **Dot notation**: `gateway.mode`, `agents.main.workspace`
+- **Bracket notation**: `gateway["mode"]`, `agents["main"]["workspace"]`
+- **Array indices**: `channels.allowlist[0]`, `providers[1].apiKey`
+- **Escaped dots**: Use backslash to escape dots in keys: `some\\.key.value`
+
+### Value Parsing
+
+By default, the command attempts to parse values as JSON5. If parsing fails, it falls back to treating the value as a raw string.
+
+- **Numbers**: `123`, `45.67`
+- **Booleans**: `true`, `false`
+- **Strings**: `"hello"` or `hello` (fallback)
+- **Objects**: `{"key": "value"}`
+- **Arrays**: `[1, 2, 3]`
+- **Null**: `null`
+
+Use `--strict-json` to enforce JSON5 parsing and error on invalid JSON.
+
+## config unset
+
+Remove a config value by dot path.
+
+```bash
+simpleclaw config unset <path>
+```
+
+<ParamField path="path" type="string" required>
+  Config path (dot or bracket notation)
+</ParamField>
+
+### Examples
+
+```bash
+# Remove gateway token
+simpleclaw config unset gateway.auth.token
+
+# Remove an array element by index
+simpleclaw config unset channels.allowlist[0]
+
+# Remove an entire section
+simpleclaw config unset agents.secondary
+```
+
+## Notes
+
+- All `config set` and `config unset` operations require a gateway restart to take effect.
+- The config file is located at `~/.simpleclaw/config.yaml` by default.
+- Invalid config paths will result in an error.
+- Use `simpleclaw doctor` if the config becomes invalid or corrupted.

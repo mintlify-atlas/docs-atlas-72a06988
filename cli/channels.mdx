@@ -1,0 +1,348 @@
+---
+title: "Channels CLI"
+description: "Manage connected chat channels and accounts"
+---
+
+The `channels` command manages connected messaging platforms including Telegram, Discord, Slack, Signal, WhatsApp, and more.
+
+## channels list
+
+List configured channels and auth profiles.
+
+```bash
+simpleclaw channels list
+```
+
+<ParamField path="--no-usage" type="boolean">
+  Skip model provider usage/quota snapshots
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+## channels status
+
+Show gateway channel status (use `status --deep` for local status).
+
+```bash
+simpleclaw channels status
+```
+
+<ParamField path="--probe" type="boolean">
+  Probe channel credentials
+</ParamField>
+
+<ParamField path="--timeout" type="number">
+  Timeout in milliseconds (default: 10000)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+**Example:**
+
+```bash
+simpleclaw channels status --probe
+```
+
+## channels capabilities
+
+Show provider capabilities (intents/scopes and supported features).
+
+```bash
+simpleclaw channels capabilities
+```
+
+<ParamField path="--channel" type="string">
+  Channel name (or `all`)
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id (only with `--channel`)
+</ParamField>
+
+<ParamField path="--target" type="string">
+  Channel target for permission audit (e.g., Discord `channel:<id>`)
+</ParamField>
+
+<ParamField path="--timeout" type="number">
+  Timeout in milliseconds (default: 10000)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+## channels resolve
+
+Resolve channel/user names to IDs.
+
+```bash
+simpleclaw channels resolve <entries...>
+```
+
+<ParamField path="entries" type="string[]" required>
+  Entries to resolve (names or ids)
+</ParamField>
+
+<ParamField path="--channel" type="string">
+  Channel name
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id
+</ParamField>
+
+<ParamField path="--kind" type="string">
+  Target kind: `auto`, `user`, or `group` (default: `auto`)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+## channels logs
+
+Show recent channel logs from the gateway log file.
+
+```bash
+simpleclaw channels logs
+```
+
+<ParamField path="--channel" type="string">
+  Channel name or `all` (default: `all`)
+</ParamField>
+
+<ParamField path="--lines" type="number">
+  Number of lines (default: 200)
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON
+</ParamField>
+
+## channels add
+
+Add or update a channel account.
+
+```bash
+simpleclaw channels add
+```
+
+<ParamField path="--channel" type="string">
+  Channel name (e.g., `telegram`, `discord`, `slack`, `signal`, `whatsapp`)
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id (default when omitted)
+</ParamField>
+
+<ParamField path="--name" type="string">
+  Display name for this account
+</ParamField>
+
+<ParamField path="--token" type="string">
+  Bot token (Telegram/Discord)
+</ParamField>
+
+<ParamField path="--token-file" type="string">
+  Bot token file (Telegram)
+</ParamField>
+
+<ParamField path="--bot-token" type="string">
+  Slack bot token (xoxb-...)
+</ParamField>
+
+<ParamField path="--app-token" type="string">
+  Slack app token (xapp-...)
+</ParamField>
+
+<ParamField path="--signal-number" type="string">
+  Signal account number (E.164)
+</ParamField>
+
+<ParamField path="--cli-path" type="string">
+  CLI path (signal-cli or imsg)
+</ParamField>
+
+<ParamField path="--db-path" type="string">
+  iMessage database path
+</ParamField>
+
+<ParamField path="--service" type="string">
+  iMessage service: `imessage`, `sms`, or `auto`
+</ParamField>
+
+<ParamField path="--region" type="string">
+  iMessage region (for SMS)
+</ParamField>
+
+<ParamField path="--auth-dir" type="string">
+  WhatsApp auth directory override
+</ParamField>
+
+<ParamField path="--http-url" type="string">
+  Signal HTTP daemon base URL
+</ParamField>
+
+<ParamField path="--http-host" type="string">
+  Signal HTTP host
+</ParamField>
+
+<ParamField path="--http-port" type="string">
+  Signal HTTP port
+</ParamField>
+
+<ParamField path="--webhook-path" type="string">
+  Webhook path (Google Chat/BlueBubbles)
+</ParamField>
+
+<ParamField path="--webhook-url" type="string">
+  Google Chat webhook URL
+</ParamField>
+
+<ParamField path="--audience-type" type="string">
+  Google Chat audience type: `app-url` or `project-number`
+</ParamField>
+
+<ParamField path="--audience" type="string">
+  Google Chat audience value (app URL or project number)
+</ParamField>
+
+<ParamField path="--homeserver" type="string">
+  Matrix homeserver URL
+</ParamField>
+
+<ParamField path="--user-id" type="string">
+  Matrix user ID
+</ParamField>
+
+<ParamField path="--access-token" type="string">
+  Matrix access token
+</ParamField>
+
+<ParamField path="--password" type="string">
+  Matrix password
+</ParamField>
+
+<ParamField path="--device-name" type="string">
+  Matrix device name
+</ParamField>
+
+<ParamField path="--initial-sync-limit" type="number">
+  Matrix initial sync limit
+</ParamField>
+
+<ParamField path="--ship" type="string">
+  Tlon ship name (e.g., `~sampel-palnet`)
+</ParamField>
+
+<ParamField path="--url" type="string">
+  Tlon ship URL
+</ParamField>
+
+<ParamField path="--code" type="string">
+  Tlon login code
+</ParamField>
+
+<ParamField path="--group-channels" type="string">
+  Tlon group channels (comma-separated)
+</ParamField>
+
+<ParamField path="--dm-allowlist" type="string">
+  Tlon DM allowlist (comma-separated ships)
+</ParamField>
+
+<ParamField path="--auto-discover-channels" type="boolean">
+  Tlon auto-discover group channels
+</ParamField>
+
+<ParamField path="--use-env" type="boolean">
+  Use env token (default account only)
+</ParamField>
+
+**Example:**
+
+```bash
+simpleclaw channels add --channel telegram --token <token>
+```
+
+## channels remove
+
+Disable or delete a channel account.
+
+```bash
+simpleclaw channels remove
+```
+
+<ParamField path="--channel" type="string">
+  Channel name
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id (default when omitted)
+</ParamField>
+
+<ParamField path="--delete" type="boolean">
+  Delete config entries (no prompt)
+</ParamField>
+
+## channels login
+
+Link a channel account (if supported).
+
+```bash
+simpleclaw channels login
+```
+
+<ParamField path="--channel" type="string">
+  Channel alias (auto when only one is configured)
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id
+</ParamField>
+
+<ParamField path="--verbose" type="boolean">
+  Verbose connection logs
+</ParamField>
+
+**Example:**
+
+```bash
+simpleclaw channels login --channel whatsapp
+```
+
+## channels logout
+
+Log out of a channel session (if supported).
+
+```bash
+simpleclaw channels logout
+```
+
+<ParamField path="--channel" type="string">
+  Channel alias (auto when only one is configured)
+</ParamField>
+
+<ParamField path="--account" type="string">
+  Account id
+</ParamField>
+
+## Examples
+
+```bash
+# List configured channels and auth profiles
+simpleclaw channels list
+
+# Run channel status checks and probes
+simpleclaw channels status --probe
+
+# Add or update a channel account non-interactively
+simpleclaw channels add --channel telegram --token <token>
+
+# Link a WhatsApp Web account
+simpleclaw channels login --channel whatsapp
+```

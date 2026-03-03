@@ -1,0 +1,250 @@
+---
+title: Gateway
+description: WebSocket gateway architecture for managing sessions, routing, and real-time communication
+---
+
+The **Gateway** is the central control plane of SimpleClaw—a WebSocket server that manages all communication between messaging channels, AI agents, and client applications.
+
+## Architecture Overview
+
+The gateway runs as a persistent WebSocket server that:
+- Accepts client connections over WebSocket
+- Routes inbound messages from messaging platforms to the appropriate agents
+- Manages session state and concurrency
+- Handles tool execution and approval workflows
+- Coordinates plugin lifecycle and channel health monitoring
+
+```typescript
+// Gateway server implementation (src/gateway/server.impl.ts)
+import { attachGatewayWsHandlers } from "./server-ws-runtime.js";
+import { createGatewayRuntimeState } from "./server-runtime-state.js";
+import { loadGatewayPlugins } from "./server-plugins.js";
+```
+
+## Core Components
+
+### WebSocket Runtime
+
+The gateway uses a binary framing protocol for efficient real-time communication. All messages are validated using Ajv schemas defined in `src/gateway/protocol/`.
+
+<CodeGroup>
+```typescript Gateway Protocol
+// src/gateway/protocol/index.ts
+import { AgentEventSchema, ChatEventSchema } from "./schema/types.js";
+
+// Client connections validated against typed schemas
+type AgentEvent = {
+  type: "agent.event";
+  payload: AgentEventPayload;
+};
+
+type ChatEvent = {
+  type: "chat.event";
+  runId: string;
+  delta?: string;
+};
+```
+
+```typescript Connection Handling
+// WebSocket handler attaches to runtime state
+attachGatewayWsHandlers({
+  runtime: gatewayRuntimeState,
+  channels: channelManager,
+  plugins: pluginRegistry
+});
+```
+</CodeGroup>
+
+### Runtime State
+
+The gateway maintains centralized runtime state including:
+- Active WebSocket connections
+- Channel plugin registry
+- Model catalog (LLM providers and models)
+- Execution approval manager
+- Node registry (connected devices)
+
+```typescript
+// src/gateway/server-runtime-state.ts
+export type GatewayRuntimeState = {
+  config: SimpleClawConfig;
+  channels: ChannelManager;
+  plugins: PluginRegistry;
+  execApproval: ExecApprovalManager;
+  nodeRegistry: NodeRegistry;
+  modelCatalog: ModelCatalog;
+};
+```
+
+## Gateway Methods
+
+The gateway exposes RPC-style methods over WebSocket for:
+
+<AccordionGroup>
+  <Accordion title="Chat Operations">
+    - `chat.send` - Send message to agent
+    - `chat.abort` - Cancel running agent interaction
+    - `chat.history` - Retrieve conversation history
+    - `chat.inject` - Inject system message into session
+  </Accordion>
+
+  <Accordion title="Agent Management">
+    - `agents.list` - List configured agents
+    - `agents.create` - Create new agent
+    - `agents.update` - Update agent configuration
+    - `agents.delete` - Remove agent
+    - `agents.files.*` - Manage agent workspace files
+  </Accordion>
+
+  <Accordion title="Session Management">
+    - `sessions.list` - List active sessions
+    - `sessions.get` - Get session details
+    - `sessions.reset` - Clear session history
+    - `sessions.send` - Send message to specific session
+  </Accordion>
+
+  <Accordion title="Channel Operations">
+    - `channels.status` - Get channel connection status
+    - `channels.logout` - Disconnect from messaging platform
+  </Accordion>
+
+  <Accordion title="Configuration">
+    - `config.get` - Retrieve configuration
+    - `config.set` - Update configuration value
+    - `config.patch` - Apply configuration patch
+    - `config.schema` - Get configuration schema
+  </Accordion>
+</AccordionGroup>
+
+## Event Flow
+
+<Steps>
+  <Step title="Client Connection">
+    Client establishes WebSocket connection to gateway (default: `ws://localhost:18789`)
+  </Step>
+  
+  <Step title="Method Invocation">
+    Client sends binary-framed RPC call (e.g., `chat.send`)
+  </Step>
+  
+  <Step title="Request Validation">
+    Gateway validates request against JSON schema
+  </Step>
+  
+  <Step title="Routing & Execution">
+    Gateway routes to appropriate handler (channel, agent, config, etc.)
+  </Step>
+  
+  <Step title="Real-time Updates">
+    Gateway streams events back to client (typing indicators, deltas, tool calls)
+  </Step>
+  
+  <Step title="Response Delivery">
+    Final response sent to client and optionally to messaging channel
+  </Step>
+</Steps>
+
+## Startup Sequence
+
+The gateway initializes subsystems in this order:
+
+1. **Config Loading** - Read and validate `~/.simpleclaw/config.yaml`
+2. **Plugin Discovery** - Load channel and provider plugins
+3. **Model Catalog** - Index available LLM providers and models
+4. **Channel Initialization** - Connect to messaging platforms
+5. **WebSocket Server** - Start listening for client connections
+6. **Maintenance Timers** - Schedule health checks and cleanup tasks
+7. **Discovery Services** - Enable Tailscale/local network discovery
+
+```typescript
+// src/gateway/server.impl.ts - Simplified startup
+export async function startGateway(params: StartGatewayParams) {
+  const cfg = await loadConfig();
+  const plugins = await loadGatewayPlugins(cfg);
+  const modelCatalog = await loadGatewayModelCatalog(cfg);
+  const channels = await createChannelManager(cfg, plugins);
+  
+  const runtime = createGatewayRuntimeState({
+    config: cfg,
+    channels,
+    plugins,
+    modelCatalog
+  });
+  
+  await attachGatewayWsHandlers(runtime);
+  await startGatewaySidecars(runtime);
+  await startGatewayMaintenanceTimers(runtime);
+}
+```
+
+## Health & Monitoring
+
+The gateway exposes health information via:
+
+- **Health Snapshots** - Cached status of all subsystems (channels, agents, cron jobs)
+- **Presence Versioning** - Incremental version numbers for change detection
+- **Channel Health Monitor** - Periodic probes of messaging platform connectivity
+- **Diagnostic Events** - Structured logging for debugging
+
+```typescript
+// Check gateway health
+import { refreshGatewayHealthSnapshot, getHealthCache } from "./server/health-state.js";
+
+const health = await refreshGatewayHealthSnapshot();
+console.log(health);
+// {
+//   channels: { discord: "connected", telegram: "disconnected" },
+//   agents: ["main", "support"],
+//   cronJobs: 3,
+//   connectedNodes: 2
+// }
+```
+
+## Configuration
+
+<ParamField path="gateway.mode" type="string" default="local">
+  Gateway mode: `local` (single-user) or `shared` (multi-user)
+</ParamField>
+
+<ParamField path="gateway.bind" type="string" default="loopback">
+  Bind address: `loopback` (127.0.0.1), `all` (0.0.0.0), or specific IP
+</ParamField>
+
+<ParamField path="gateway.port" type="number" default="18789">
+  WebSocket server port
+</ParamField>
+
+<ParamField path="gateway.tls" type="object">
+  Optional TLS configuration for secure WebSocket connections
+</ParamField>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Connection Pooling" icon="layer-group">
+    Reuse WebSocket connections instead of creating new ones per request
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Always handle connection errors and implement reconnection logic
+  </Card>
+  
+  <Card title="Message Validation" icon="shield-check">
+    Validate all messages against protocol schemas before sending
+  </Card>
+  
+  <Card title="Health Monitoring" icon="heart-pulse">
+    Regularly check gateway health and channel status
+  </Card>
+</CardGroup>
+
+<Note>
+  The gateway runs as a single process. On macOS, it's managed by the menu bar app. On Linux/cloud deployments, use systemd or process managers like PM2.
+</Note>
+
+## Related Topics
+
+- [Agents](/concepts/agents) - Multi-agent orchestration
+- [Routing](/concepts/routing) - Message routing and bindings
+- [Sessions](/concepts/sessions) - Session management and persistence
+- [Models](/concepts/models) - LLM provider configuration

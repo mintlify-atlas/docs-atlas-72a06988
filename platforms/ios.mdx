@@ -1,0 +1,333 @@
+---
+title: "iOS"
+description: "SimpleClaw iOS app for iPhone with gateway connectivity and mobile features"
+---
+
+The SimpleClaw iOS app connects to a SimpleClaw Gateway as a mobile node, providing access to iPhone sensors and capabilities.
+
+<Warning>
+**Super Alpha Status**
+
+The iOS app is in super-alpha and **internal-use only**. Breaking changes are expected. NO TEST FLIGHT AVAILABLE AT THIS POINT.
+
+Distribution: local/manual deploy from source via Xcode only.
+</Warning>
+
+## Overview
+
+The iOS app enables mobile access to your SimpleClaw assistant:
+
+- **Gateway connection** - connects to your SimpleClaw Gateway via WiFi or cellular
+- **Chat interface** - text conversations with your assistant
+- **Voice Wake** - hands-free voice activation
+- **Talk Mode** - voice conversations with audio responses
+- **Camera access** - photo and video capture
+- **Screen recording** - capture screen content
+- **Location services** - share device location
+- **Canvas** - view and interact with agent-controlled web content
+- **Share extension** - forward content from other apps
+
+## System Requirements
+
+- **iOS 15.0** or later
+- **Xcode 16+** (for building from source)
+- Apple Development signing profile
+- Connected to same network as SimpleClaw Gateway (for discovery)
+
+## Installation
+
+<Warning>
+NO TEST FLIGHT AVAILABLE. The iOS app must be built and installed manually via Xcode.
+</Warning>
+
+### Prerequisites
+
+1. **Xcode 16 or later** - Install from the Mac App Store
+2. **pnpm** - Package manager: `npm install -g pnpm`
+3. **xcodegen** - Project generator: `brew install xcodegen`
+4. **Apple Developer account** - Free or paid account for signing
+
+### Build and Deploy
+
+From the repository root:
+
+```bash
+# Install dependencies
+pnpm install
+
+# Configure signing
+./scripts/ios-configure-signing.sh
+
+# Generate Xcode project
+cd apps/ios
+xcodegen generate
+
+# Open in Xcode
+open SimpleClaw.xcodeproj
+```
+
+Or use the shortcut:
+
+```bash
+pnpm ios:open
+```
+
+### Xcode Setup
+
+1. Connect your iPhone via USB
+2. Select **SimpleClaw** scheme
+3. Select your iPhone as destination (real device recommended)
+4. Select **Debug** build configuration
+5. Click **Product > Run** (⌘R)
+
+### Signing Configuration
+
+If signing fails with a personal team:
+
+1. Copy `apps/ios/LocalSigning.xcconfig.example` to `apps/ios/LocalSigning.xcconfig`
+2. Edit `LocalSigning.xcconfig` with unique bundle IDs
+3. Rebuild the project
+
+## Features
+
+### Gateway Connection
+
+Connect to your SimpleClaw Gateway:
+
+**Discovery mode:**
+- Automatic discovery via Bonjour/mDNS
+- Shows available gateways on local network
+- One-tap connection
+
+**Manual mode:**
+- Specify gateway host and port
+- TLS fingerprint trust prompt
+- Supports remote gateways
+
+**Setup code flow:**
+1. Open the app and navigate to **Connect**
+2. Enter setup code from gateway
+3. Approve pairing on gateway:
+   ```bash
+   simpleclaw nodes pending
+   simpleclaw nodes approve <requestId>
+   ```
+
+### Chat & Talk
+
+Text and voice interaction:
+
+- **Chat** - send text messages to your assistant
+- **Talk** - push-to-talk voice input with audio responses
+- **Session management** - view conversation history
+- **Threading** - replies maintain context
+
+### Camera & Screen
+
+**Camera capture:**
+- `camera.snap` - capture still photos
+- `camera.clip` - record short video clips with optional audio
+
+**Screen recording:**
+- `screen.record` - capture screen content
+- Requires Screen Recording permission
+
+**Required permissions:**
+- Camera (for photo/video)
+- Microphone (for video with audio)
+- Screen Recording (for screen capture)
+
+### Location Services
+
+Share device location with your assistant:
+
+- **One-time location** - current location on request
+- **Significant location changes** - movement-based updates
+- **Background location** - requires "Always" permission
+
+**Location automation:**
+- Arrival/exit geofence triggers
+- Significant movement detection
+- Visit detection
+
+**Important:** Location automation is for movement-aware triggers, not continuous GPS polling.
+
+### Canvas
+
+View agent-controlled web content:
+
+- WebKit-based rendering
+- JavaScript evaluation
+- Navigation control
+- Snapshot capture
+
+**Commands:**
+- `canvas.present` - show content
+- `canvas.navigate` - load URL
+- `canvas.eval` - run JavaScript
+- `canvas.snapshot` - capture screenshot
+
+### Share Extension
+
+Forward content from other apps:
+
+1. Open content in any app (Safari, Photos, etc.)
+2. Tap Share button
+3. Select **SimpleClaw**
+4. Content is forwarded to your gateway session
+
+## Permissions
+
+The iOS app requires several permissions:
+
+| Permission | Purpose | Required |
+|------------|---------|----------|
+| **Network** | Gateway connection | Yes |
+| **Notifications** | APNs push notifications | Optional |
+| **Camera** | Photo and video capture | Optional |
+| **Microphone** | Audio recording and Talk Mode | Optional |
+| **Location (When in Use)** | Location sharing | Optional |
+| **Location (Always)** | Background location updates | Optional |
+| **Screen Recording** | Screen capture | Optional |
+| **Contacts** | Contact access | Optional |
+| **Calendar** | Calendar access | Optional |
+| **Reminders** | Reminders access | Optional |
+| **Photo Library** | Photo access | Optional |
+| **Motion** | Motion and activity data | Optional |
+
+Permissions are requested when first needed.
+
+## APNs Push Notifications
+
+The app registers for Apple Push Notification service (APNs):
+
+- **Development builds** - APNs sandbox environment
+- **Release builds** - APNs production environment
+- **Registration** - happens after gateway connection
+- **Token sharing** - device token sent to gateway via `push.apns.register`
+
+APNs requires:
+- Push Notifications capability enabled
+- Correct provisioning profile
+- Valid bundle ID in Apple Developer portal
+
+Check Xcode console for APNs errors: `APNs registration failed`
+
+## Background Behavior
+
+<Warning>
+**Foreground-first design**
+
+iOS can suspend background connections. Reconnect recovery is still being tuned.
+</Warning>
+
+### Background Limitations
+
+When the app is backgrounded:
+
+- WebSocket connections may be suspended
+- These commands are **blocked**: `canvas.*`, `camera.*`, `screen.*`, `talk.*`
+- Location updates require "Always" permission
+- Background refresh may wake the app periodically
+
+### Wake & Reconnect
+
+The app attempts to reconnect when:
+
+- Returning to foreground
+- Receiving APNs silent push
+- Background app refresh trigger
+- Significant location change
+
+Pairing/auth errors pause reconnect loops until resolved.
+
+## Known Issues
+
+- **Background reliability** - foreground use is most reliable
+- **Socket suspension** - iOS may suspend background connections
+- **Command limits** - many commands blocked when backgrounded
+- **Voice Wake conflicts** - Talk Mode suppresses wake capture while active
+- **APNs reliability** - depends on correct signing/provisioning
+- **Reconnect churn** - expect occasional reconnect during active development
+
+## Debugging
+
+### Build Issues
+
+1. Regenerate project: `xcodegen generate`
+2. Verify team and bundle IDs in Xcode
+3. Check signing certificate selection
+4. Clean build folder: **Product > Clean Build Folder**
+
+### Connection Issues
+
+1. Check **Settings > Gateway** for status
+2. Verify gateway is running and reachable
+3. Check firewall and network settings
+4. Try manual connection with host/port
+
+### Pairing Issues
+
+If pairing fails:
+
+1. Run `/pair approve` from Telegram/WhatsApp
+2. Check gateway logs for pairing requests
+3. Verify setup code is correct
+4. Reconnect after approval
+
+### Discovery Issues
+
+If gateway discovery fails:
+
+1. Enable **Discovery Debug Logs** in Settings
+2. Check **Settings > Gateway > Discovery Logs**
+3. Verify both devices on same network
+4. Check firewall allows mDNS/Bonjour
+
+### Xcode Console
+
+Filter logs by subsystem:
+
+- `ai.simpleclaw.ios` - app logs
+- `GatewayDiag` - gateway diagnostics
+- `APNs registration failed` - push notification errors
+
+## Development
+
+### Project Structure
+
+The iOS app source is located at `apps/ios/`:
+
+```
+apps/ios/
+├── Sources/                   # Swift source files
+│   ├── SimpleClaw.entitlements  # App capabilities
+│   ├── Info.plist             # App metadata
+│   ├── SimpleClawApp.swift    # App entry point
+│   ├── Model/                 # App models
+│   ├── Gateway/               # Gateway connection
+│   ├── Voice/                 # Voice Wake and Talk
+│   ├── Screen/                # Screen recording
+│   ├── Services/              # Device services
+│   └── ...
+├── Tests/                     # Unit tests
+├── WatchApp/                  # Apple Watch companion
+├── WatchExtension/            # Watch extension
+├── project.yml                # XcodeGen config
+└── fastlane/                  # Build automation
+```
+
+### Running Tests
+
+```bash
+cd apps/ios
+xcodebuild test -scheme SimpleClaw -destination 'platform=iOS Simulator,name=iPhone 15'
+```
+
+## Related Documentation
+
+- [Nodes](/features/voice)
+- [Voice Wake](/features/voice#voice-wake)
+- [Talk Mode](/features/voice#talk-mode)
+- [Gateway Configuration](/configuration)
+

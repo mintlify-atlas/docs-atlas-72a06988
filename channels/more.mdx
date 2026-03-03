@@ -1,0 +1,460 @@
+---
+title: Extension Channels
+description: Additional messaging platforms available as SimpleClaw extensions
+---
+
+Beyond the core channels, SimpleClaw supports additional messaging platforms through extensions. These channels are available as separate plugins that can be enabled as needed.
+
+## Available Extension Channels
+
+### Matrix
+
+**Decentralized communication protocol**
+
+Matrix is an open standard for decentralized, real-time communication.
+
+<Accordion title="Matrix Setup">
+  ```yaml
+  channels:
+    matrix:
+      enabled: true
+      homeserver: "https://matrix.org"
+      accessToken: "your-access-token"
+  ```
+  
+  **Features:**
+  - End-to-end encryption
+  - Federation across servers
+  - Group chats and spaces
+  - Media support
+  
+  **Channel ID:** `matrix`
+</Accordion>
+
+### Microsoft Teams
+
+**Enterprise collaboration platform**
+
+Connect SimpleClaw to Microsoft Teams for organizational use.
+
+<Accordion title="Microsoft Teams Setup">
+  ```yaml
+  channels:
+    msteams:
+      enabled: true
+      # Teams-specific configuration
+  ```
+  
+  **Features:**
+  - Teams and channel integration
+  - Direct messaging
+  - Bot framework integration
+  
+  **Channel ID:** `msteams`
+</Accordion>
+
+### Google Chat
+
+**Google Workspace messaging**
+
+Integrate with Google Chat for Google Workspace environments.
+
+<Accordion title="Google Chat Setup">
+  ```yaml
+  channels:
+    googlechat:
+      enabled: true
+      # Google Chat-specific configuration
+  ```
+  
+  **Features:**
+  - Spaces and rooms
+  - Direct messages
+  - Google Workspace integration
+  
+  **Channel ID:** `googlechat`
+</Accordion>
+
+### Mattermost
+
+**Open-source team collaboration**
+
+Mattermost is a self-hosted Slack alternative.
+
+<Accordion title="Mattermost Setup">
+  ```yaml
+  channels:
+    mattermost:
+      enabled: true
+      url: "https://your-mattermost.com"
+      token: "your-bot-token"
+  ```
+  
+  **Features:**
+  - Self-hosted deployment
+  - Channels and direct messages
+  - Slash commands
+  - Webhooks and integrations
+  
+  **Channel ID:** `mattermost`
+</Accordion>
+
+### IRC
+
+**Internet Relay Chat**
+
+Classic IRC protocol support for connecting to IRC networks.
+
+<Accordion title="IRC Setup">
+  ```yaml
+  channels:
+    irc:
+      enabled: true
+      server: "irc.libera.chat"
+      port: 6667
+      nick: "SimpleClaw"
+      channels:
+        - "#simpleclaw"
+  ```
+  
+  **Features:**
+  - Multiple network support
+  - Channel and private messages
+  - SASL authentication
+  - SSL/TLS connections
+  
+  **Channel ID:** `irc`
+</Accordion>
+
+### LINE
+
+**Popular messaging app in Asia**
+
+LINE integration for messaging in Asian markets.
+
+<Accordion title="LINE Setup">
+  ```yaml
+  channels:
+    line:
+      enabled: true
+      channelSecret: "your-channel-secret"
+      channelAccessToken: "your-access-token"
+  ```
+  
+  **Features:**
+  - Direct and group messages
+  - Rich media support
+  - Stickers and reactions
+  
+  **Channel ID:** `line`
+</Accordion>
+
+### Zalo
+
+**Vietnamese messaging platform**
+
+Integrate with Zalo for Vietnamese market communication.
+
+<Accordion title="Zalo Setup">
+  ```yaml
+  channels:
+    zalo:
+      enabled: true
+      # Zalo-specific configuration
+  ```
+  
+  **Features:**
+  - Official account integration
+  - User messaging
+  - Vietnamese language support
+  
+  **Channel ID:** `zalo`
+  
+  **User Mode:**
+  There's also a `zalouser` extension for personal Zalo accounts.
+</Accordion>
+
+### Synology Chat
+
+**Synology NAS chat platform**
+
+Connect to Synology Chat on Synology NAS devices.
+
+<Accordion title="Synology Chat Setup">
+  ```yaml
+  channels:
+    synology-chat:
+      enabled: true
+      url: "https://your-nas.com"
+      token: "your-token"
+  ```
+  
+  **Features:**
+  - Private cloud messaging
+  - Self-hosted on Synology NAS
+  - Channels and direct messages
+  
+  **Channel ID:** `synology-chat`
+</Accordion>
+
+### Feishu (Lark)
+
+**Enterprise collaboration platform**
+
+Feishu (international brand: Lark) integration for enterprise communication.
+
+<Accordion title="Feishu Setup">
+  ```yaml
+  channels:
+    feishu:
+      enabled: true
+      # Feishu-specific configuration
+  ```
+  
+  **Features:**
+  - Enterprise messaging
+  - Bot integration
+  - Asian market focus
+  
+  **Channel ID:** `feishu`
+</Accordion>
+
+### Nextcloud Talk
+
+**Nextcloud integrated chat**
+
+Chat integration for Nextcloud self-hosted cloud platform.
+
+<Accordion title="Nextcloud Talk Setup">
+  ```yaml
+  channels:
+    nextcloud-talk:
+      enabled: true
+      url: "https://your-nextcloud.com"
+      username: "bot-user"
+      password: "bot-password"
+  ```
+  
+  **Features:**
+  - Self-hosted
+  - Video calls integration
+  - File sharing
+  
+  **Channel ID:** `nextcloud-talk`
+</Accordion>
+
+### Nostr
+
+**Decentralized social protocol**
+
+Nostr protocol integration for decentralized messaging.
+
+<Accordion title="Nostr Setup">
+  ```yaml
+  channels:
+    nostr:
+      enabled: true
+      relays:
+        - "wss://relay.nostr.info"
+      privateKey: "your-private-key"
+  ```
+  
+  **Features:**
+  - Decentralized protocol
+  - Relay-based messaging
+  - Cryptographic identity
+  
+  **Channel ID:** `nostr`
+</Accordion>
+
+### Twitch
+
+**Live streaming chat**
+
+Integrate with Twitch chat for streaming platforms.
+
+<Accordion title="Twitch Setup">
+  ```yaml
+  channels:
+    twitch:
+      enabled: true
+      username: "your-bot-name"
+      oauth: "oauth:your-token"
+      channels:
+        - "your-channel"
+  ```
+  
+  **Features:**
+  - Chat integration
+  - Channel moderation
+  - Emotes support
+  
+  **Channel ID:** `twitch`
+</Accordion>
+
+### BlueBubbles
+
+**iMessage alternative client**
+
+BlueBubbles server integration for iMessage access.
+
+<Accordion title="BlueBubbles Setup">
+  ```yaml
+  channels:
+    bluebubbles:
+      enabled: true
+      url: "http://your-server:1234"
+      password: "your-password"
+  ```
+  
+  **Features:**
+  - iMessage without macOS
+  - Remote iMessage server
+  - Cross-platform access
+  
+  **Channel ID:** `bluebubbles`
+</Accordion>
+
+### Tlon (Urbit)
+
+**Urbit messaging**
+
+Integration with Urbit/Tlon decentralized platform.
+
+<Accordion title="Tlon Setup">
+  ```yaml
+  channels:
+    tlon:
+      enabled: true
+      # Tlon-specific configuration
+  ```
+  
+  **Features:**
+  - Urbit OS integration
+  - Peer-to-peer messaging
+  - Decentralized identity
+  
+  **Channel ID:** `tlon`
+</Accordion>
+
+## Voice Channels
+
+### Voice Call
+
+**Telephony integration**
+
+Voice call support through telephony providers (Twilio, Telnyx, Plivo).
+
+<Accordion title="Voice Call Setup">
+  ```yaml
+  channels:
+    voice-call:
+      enabled: true
+      provider: "twilio"  # or telnyx, plivo
+      accountSid: "your-account-sid"
+      authToken: "your-auth-token"
+      phoneNumber: "+1234567890"
+  ```
+  
+  **Supported Providers:**
+  - Twilio
+  - Telnyx
+  - Plivo
+  
+  **Features:**
+  - Inbound/outbound calls
+  - TTS (text-to-speech)
+  - STT (speech-to-text)
+  - Interactive voice response
+  
+  **Channel ID:** `voice-call`
+</Accordion>
+
+## Installing Extension Channels
+
+Most extension channels are included with SimpleClaw. To enable:
+
+```bash
+# Check available extensions
+simpleclaw extensions list
+
+# Enable specific channel
+simpleclaw config set channels.<channel-id>.enabled true
+```
+
+## Extension Development
+
+Developers can create custom channel extensions. Extension channels are located in the `extensions/` directory of the SimpleClaw repository.
+
+**Extension structure:**
+```
+extensions/your-channel/
+├── src/
+│   ├── channel.ts       # Channel plugin implementation
+│   └── runtime.ts       # Runtime helpers
+├── index.ts             # Plugin entry point
+├── package.json         # Extension metadata
+└── simpleclaw.plugin.json  # Plugin configuration
+```
+
+**Key files:**
+- `simpleclaw.plugin.json`: Declares channel ID and config schema
+- `src/channel.ts`: Implements `ChannelPlugin` interface
+- `index.ts`: Exports plugin for SimpleClaw to load
+
+## Configuration Reference
+
+Each extension channel has its own configuration schema defined in `simpleclaw.plugin.json`. Check the specific extension directory for:
+
+- Configuration options
+- Authentication requirements
+- Capability matrix
+- Setup instructions
+
+Extension source code: `~/workspace/source/extensions/<channel-name>/`
+
+## Feature Matrix
+
+| Channel | DMs | Groups | Threads | Media | E2EE | Self-Hosted |
+|---------|-----|--------|---------|-------|------|-------------|
+| Matrix | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Teams | ✓ | ✓ | ✓ | ✓ | — | — |
+| Google Chat | ✓ | ✓ | ✓ | ✓ | — | — |
+| Mattermost | ✓ | ✓ | ✓ | ✓ | — | ✓ |
+| IRC | ✓ | ✓ | — | — | — | ✓ |
+| LINE | ✓ | ✓ | — | ✓ | — | — |
+| Zalo | ✓ | ✓ | — | ✓ | — | — |
+| Synology Chat | ✓ | ✓ | — | ✓ | — | ✓ |
+| Feishu | ✓ | ✓ | ✓ | ✓ | — | — |
+| Nextcloud Talk | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| Nostr | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| Twitch | — | ✓ | — | — | — | — |
+| BlueBubbles | ✓ | ✓ | — | ✓ | — | — |
+| Tlon | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| Voice Call | ✓ | — | — | ✓ | — | — |
+
+## Getting Help
+
+For extension-specific issues:
+
+1. Check extension README: `extensions/<channel>/README.md`
+2. Review source code: `extensions/<channel>/src/`
+3. Check SimpleClaw documentation
+4. Open GitHub issue with `channel/<channel-name>` label
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Core Channels" icon="comments" href="/channels/overview">
+    Learn about core messaging channels
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Detailed configuration reference
+  </Card>
+  <Card title="Extension Development" icon="code" href="/development/extensions">
+    Build custom channel plugins
+  </Card>
+  <Card title="Security" icon="shield" href="/security">
+    Configure security policies
+  </Card>
+</CardGroup>

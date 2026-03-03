@@ -1,0 +1,498 @@
+---
+title: "Webhooks"
+description: "Trigger SimpleClaw agent runs from external events and services"
+---
+
+# Webhooks
+
+SimpleClaw's webhook system lets external services trigger agent runs and send system events to your assistant.
+
+## Use Cases
+
+- **GitHub** - Trigger agent on new issues, PRs, or commits
+- **Email** - Process incoming emails via Gmail Pub/Sub
+- **Monitoring** - Alert agent when services go down
+- **Calendars** - Notify agent of upcoming events
+- **Custom Services** - Integrate any HTTP-capable service
+
+## Quick Setup
+
+<Steps>
+  <Step title="Enable Webhooks">
+    ```bash
+    simpleclaw config set hooks.enabled true --json
+    simpleclaw config set hooks.token '"your-secret-token"' --json
+    ```
+  </Step>
+
+  <Step title="Restart Gateway">
+    ```bash
+    simpleclaw gateway restart
+    ```
+  </Step>
+
+  <Step title="Test the Webhook">
+    ```bash
+    curl -X POST http://localhost:18789/hooks/wake \
+      -H "Authorization: Bearer your-secret-token" \
+      -H "Content-Type: application/json" \
+      -d '{"text": "Test event"}'
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+```json
+{
+  "hooks": {
+    "enabled": true,
+    "token": "your-secret-token",
+    "path": "/hooks",
+    "allowedAgentIds": ["hooks", "main"],
+    "allowRequestSessionKey": false
+  }
+}
+```
+
+<ParamField path="enabled" type="boolean" required>
+  Enable webhook endpoints
+</ParamField>
+
+<ParamField path="token" type="string" required>
+  Shared secret for webhook authentication
+</ParamField>
+
+<ParamField path="path" type="string" default="/hooks">
+  Base path for webhook endpoints
+</ParamField>
+
+<ParamField path="allowedAgentIds" type="string[]">
+  Restrict which agents can be triggered. Omit or include `"*"` to allow any agent.
+</ParamField>
+
+<ParamField path="allowRequestSessionKey" type="boolean" default="false">
+  Allow webhooks to specify custom session keys (security risk)
+</ParamField>
+
+## Webhook Endpoints
+
+### POST /hooks/wake
+
+Trigger a system event in the main session.
+
+**Request:**
+
+```bash
+curl -X POST http://localhost:18789/hooks/wake \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "New email from client@example.com",
+    "mode": "now"
+  }'
+```
+
+**Parameters:**
+
+<ParamField path="text" type="string" required>
+  Event description (e.g., "New email received")
+</ParamField>
+
+<ParamField path="mode" type="string" default="now">
+  When to trigger: `now` (immediate) or `next-heartbeat` (wait for periodic check)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "message": "Wake event enqueued"
+}
+```
+
+### POST /hooks/agent
+
+Run an isolated agent task.
+
+**Request:**
+
+```bash
+curl -X POST http://localhost:18789/hooks/agent \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Review this pull request: https://github.com/user/repo/pull/123",
+    "name": "GitHub",
+    "agentId": "coding",
+    "deliver": true,
+    "channel": "slack",
+    "to": "#engineering"
+  }'
+```
+
+**Parameters:**
+
+<ParamField path="message" type="string" required>
+  Prompt or message for the agent
+</ParamField>
+
+<ParamField path="name" type="string">
+  Human-readable hook name (e.g., "GitHub", "Email")
+</ParamField>
+
+<ParamField path="agentId" type="string" default="main">
+  Target agent ID
+</ParamField>
+
+<ParamField path="sessionKey" type="string">
+  Custom session key (requires `allowRequestSessionKey: true`)
+</ParamField>
+
+<ParamField path="wakeMode" type="string" default="now">
+  `now` or `next-heartbeat`
+</ParamField>
+
+<ParamField path="deliver" type="boolean" default="true">
+  Send response to messaging channel
+</ParamField>
+
+<ParamField path="channel" type="string" default="last">
+  Target channel: `last`, `whatsapp`, `telegram`, `discord`, `slack`, etc.
+</ParamField>
+
+<ParamField path="to" type="string">
+  Recipient ID (phone number, chat ID, channel ID)
+</ParamField>
+
+<ParamField path="model" type="string">
+  Override model (e.g., `anthropic/claude-opus-4-6`)
+</ParamField>
+
+<ParamField path="thinking" type="string">
+  Thinking level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`
+</ParamField>
+
+<ParamField path="timeoutSeconds" type="number">
+  Maximum duration for agent run (seconds)
+</ParamField>
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "sessionKey": "hook:github:pr-123",
+  "message": "Agent task enqueued"
+}
+```
+
+## Authentication
+
+Webhooks support two auth methods:
+
+### Bearer Token (Recommended)
+
+```bash
+curl -H "Authorization: Bearer your-secret-token" ...
+```
+
+### Custom Header
+
+```bash
+curl -H "x-simpleclaw-token: your-secret-token" ...
+```
+
+<Warning>
+  Query string tokens (`?token=...`) are **rejected** for security.
+</Warning>
+
+## External Service Examples
+
+### GitHub Webhooks
+
+<Steps>
+  <Step title="Create GitHub Webhook">
+    1. Go to your repo → **Settings** → **Webhooks**
+    2. Click **Add webhook**
+    3. Set **Payload URL**: `https://your-gateway.example.com/hooks/agent`
+    4. Set **Content type**: `application/json`
+    5. Set **Secret**: (leave empty for now)
+    6. Select events: **Pull requests**, **Issues**
+  </Step>
+
+  <Step title="Create Webhook Handler Script">
+    Since GitHub sends complex payloads, create a proxy:
+
+    ```typescript
+    // github-webhook-proxy.ts
+    import express from "express";
+
+    const app = express();
+    app.use(express.json());
+
+    app.post("/github", async (req, res) => {
+      const event = req.headers["x-github-event"];
+      const payload = req.body;
+
+      if (event === "pull_request" && payload.action === "opened") {
+        const pr = payload.pull_request;
+        const message = `New PR: ${pr.title}\n\nReview: ${pr.html_url}`;
+
+        await fetch("http://localhost:18789/hooks/agent", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer your-secret-token",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message,
+            name: "GitHub",
+            agentId: "coding",
+            deliver: true,
+            channel: "slack",
+            to: "#code-review",
+          }),
+        });
+      }
+
+      res.json({ ok: true });
+    });
+
+    app.listen(3000);
+    ```
+  </Step>
+
+  <Step title="Deploy Proxy">
+    Run the proxy and point GitHub webhook to it:
+    ```
+    https://your-server.com:3000/github
+    ```
+  </Step>
+</Steps>
+
+### Gmail Pub/Sub
+
+Trigger on incoming emails:
+
+<Steps>
+  <Step title="Set Up Gmail Pub/Sub">
+    Follow the [Gmail Pub/Sub guide](/features/automation#gmail-pubsub) to configure email notifications.
+  </Step>
+
+  <Step title="Create Pub/Sub Handler">
+    ```typescript
+    import { PubSub } from "@google-cloud/pubsub";
+
+    const pubsub = new PubSub();
+    const subscription = pubsub.subscription("gmail-subscription");
+
+    subscription.on("message", async (message) => {
+      const data = JSON.parse(message.data.toString());
+      
+      // Parse email notification
+      const emailId = data.emailAddress;
+      const historyId = data.historyId;
+
+      // Fetch email details via Gmail API
+      const email = await fetchEmailDetails(emailId);
+
+      // Trigger agent
+      await fetch("http://localhost:18789/hooks/agent", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer your-secret-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: `New email from ${email.from}: ${email.subject}`,
+          name: "Email",
+          agentId: "main",
+          deliver: true,
+          channel: "telegram",
+        }),
+      });
+
+      message.ack();
+    });
+    ```
+  </Step>
+</Steps>
+
+### Monitoring Alerts
+
+Integrate with Uptime Kuma, Prometheus, etc.:
+
+```bash
+# When service goes down
+curl -X POST http://localhost:18789/hooks/agent \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "ALERT: API server is down. Check logs and restart if needed.",
+    "name": "Monitoring",
+    "deliver": true,
+    "channel": "telegram",
+    "to": "@admin"
+  }'
+```
+
+### Calendar Reminders
+
+Cron job that checks calendar and sends reminders:
+
+```bash
+#!/bin/bash
+# check-calendar.sh
+
+UPCOMING=$(gcalcli agenda --nostarted --tsv | head -1)
+
+if [ -n "$UPCOMING" ]; then
+  curl -X POST http://localhost:18789/hooks/wake \
+    -H "Authorization: Bearer your-secret-token" \
+    -H "Content-Type: application/json" \
+    -d "{\"text\": \"Upcoming: $UPCOMING\"}"
+fi
+```
+
+Schedule with cron:
+```
+0 * * * * /path/to/check-calendar.sh
+```
+
+## Remote Webhooks
+
+Expose webhooks securely for external services:
+
+### Option 1: Tailscale Funnel
+
+```bash
+simpleclaw config set gateway.tailscale.mode '"funnel"' --json
+simpleclaw config set gateway.auth.mode '"password"' --json
+simpleclaw config set gateway.auth.password '"strong-password"' --json
+```
+
+Webhook URL:
+```
+https://gateway-name.tailnet.ts.net/hooks/agent
+```
+
+### Option 2: Reverse Proxy (nginx)
+
+```nginx
+server {
+  listen 443 ssl;
+  server_name hooks.example.com;
+
+  ssl_certificate /path/to/cert.pem;
+  ssl_certificate_key /path/to/key.pem;
+
+  location /hooks/ {
+    proxy_pass http://127.0.0.1:18789/hooks/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+}
+```
+
+## Security Best Practices
+
+<Warning>
+  Always use HTTPS and strong tokens for production webhooks.
+</Warning>
+
+- Use long, random tokens (32+ characters)
+- Never commit tokens to git
+- Use environment variables:
+  ```bash
+  export SIMPLECLAW_WEBHOOK_TOKEN="$(openssl rand -hex 32)"
+  ```
+- Restrict allowed agent IDs
+- Disable `allowRequestSessionKey` unless absolutely needed
+- Use Tailscale or VPN for private webhooks
+- Enable Gateway password auth for public exposure
+
+## Debugging Webhooks
+
+### Test Locally
+
+```bash
+curl -v -X POST http://localhost:18789/hooks/wake \
+  -H "Authorization: Bearer your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Debug test"}'
+```
+
+### Check Gateway Logs
+
+```bash
+simpleclaw gateway logs --tail 50 | grep webhook
+```
+
+### Webhook Request Inspector
+
+Use [webhook.site](https://webhook.site) to inspect payloads from external services before routing to SimpleClaw.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized">
+    - Verify token matches config:
+      ```bash
+      simpleclaw config get hooks.token
+      ```
+    - Check auth header format:
+      ```
+      Authorization: Bearer <token>
+      ```
+  </Accordion>
+
+  <Accordion title="404 Not Found">
+    - Verify hooks are enabled:
+      ```bash
+      simpleclaw config get hooks.enabled
+      ```
+    - Check webhook path:
+      ```bash
+      simpleclaw config get hooks.path
+      ```
+  </Accordion>
+
+  <Accordion title="Agent not triggered">
+    - Check allowed agents:
+      ```bash
+      simpleclaw config get hooks.allowedAgentIds
+      ```
+    - View Gateway logs:
+      ```bash
+      simpleclaw gateway logs --tail 50
+      ```
+  </Accordion>
+
+  <Accordion title="Response not delivered">
+    - Verify channel is configured:
+      ```bash
+      simpleclaw channels status
+      ```
+    - Check `deliver: true` in webhook payload
+    - Ensure `to` parameter is valid for the channel
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Skills" icon="puzzle-piece" href="/guides/custom-skills">
+    Create tools that webhooks can trigger
+  </Card>
+  <Card title="Multi-Agent Setup" icon="users" href="/guides/multi-agent-setup">
+    Route webhooks to specialized agents
+  </Card>
+  <Card title="Remote Gateway" icon="server" href="/guides/remote-gateway">
+    Expose webhooks from remote server
+  </Card>
+  <Card title="Automation Guide" icon="robot" href="/automation/hooks">
+    Advanced webhook automation patterns
+  </Card>
+</CardGroup>

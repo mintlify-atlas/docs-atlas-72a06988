@@ -1,0 +1,481 @@
+---
+title: Allowlist Configuration
+summary: Configure and manage sender allowlists for SimpleClaw channel access control
+---
+
+# Allowlist Configuration
+
+Allowlists control who is authorized to send messages to your SimpleClaw assistant on each messaging channel. SimpleClaw supports both **configuration-based** and **dynamic pairing-based** allowlists.
+
+## Allowlist Types
+
+### 1. Configuration Allowlists
+
+Static allowlists defined in your `openclaw.json` or `openclaw.yaml` configuration:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "allowFrom": [
+        "telegram:123456789",  // Specific user ID
+        "987654321"            // Without prefix
+      ]
+    }
+  }
+}
+```
+
+### 2. Dynamic Allowlists (Pairing Store)
+
+Automatically maintained when you approve pairing requests:
+
+- Stored in `~/.openclaw/credentials/<channel>-allowFrom.json`
+- Updated when you run `simpleclaw pairing approve <channel> <code>`
+- Persists across SimpleClaw restarts
+
+### 3. Combined Allowlists
+
+SimpleClaw merges both sources:
+
+```
+Effective allowlist = Configuration allowFrom + Pairing store allowFrom
+```
+
+**Exception**: When `dmPolicy: "allowlist"`, only configuration allowlists are used (pairing store is ignored).
+
+## Configuration Syntax
+
+### Basic Allowlist
+
+Allow specific users by ID:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "allowFrom": [
+        "123456789",
+        "987654321"
+      ]
+    }
+  }
+}
+```
+
+### Wildcard (Allow All)
+
+Allow all senders:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "allowFrom": ["*"]
+    }
+  }
+}
+```
+
+**Warning**: This disables access control. Only use in trusted environments.
+
+### Channel-Specific Prefixes
+
+You can use channel-specific ID formats:
+
+#### Telegram
+
+```json5
+"allowFrom": [
+  "telegram:123456789",
+  "user:123456789",
+  "123456789"  // Bare numeric ID
+]
+```
+
+#### Discord
+
+```json5
+"allowFrom": [
+  "discord:123456789012345678",
+  "user:123456789012345678",
+  "<@123456789012345678>",      // Mention format
+  "<@!123456789012345678>",     // Mention with nickname
+  "pk:abcdef"                   // PluralKit system ID
+]
+```
+
+#### Slack
+
+```json5
+"allowFrom": [
+  "slack:U1234567890",
+  "user:U1234567890",
+  "<@U1234567890>",  // Mention format
+  "U1234567890"      // Bare user ID
+]
+```
+
+#### WhatsApp
+
+```json5
+"allowFrom": [
+  "+15551234567",    // E.164 format
+  "15551234567",     // Without +
+  1555123456         // Numeric
+]
+```
+
+#### Signal
+
+```json5
+"allowFrom": [
+  "+15551234567"     // E.164 format required
+]
+```
+
+## Group Access Control
+
+Separate controls for group messages vs. direct messages:
+
+### Group Policies
+
+#### `open` (Default)
+
+Allow all group messages, only enforce mention-gating:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "groupPolicy": "open"
+    }
+  }
+}
+```
+
+#### `allowlist`
+
+Only allow group messages from senders in `groupAllowFrom` (or `allowFrom` if not set):
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": [
+        "123456789",
+        "987654321"
+      ]
+    }
+  }
+}
+```
+
+#### `disabled`
+
+Block all group messages:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "groupPolicy": "disabled"
+    }
+  }
+}
+```
+
+### Group Allowlist Inheritance
+
+If `groupAllowFrom` is not specified:
+
+```
+Effective groupAllowFrom = allowFrom
+```
+
+You can override this by explicitly setting `groupAllowFrom`.
+
+## Account-Scoped Allowlists
+
+For channels with multiple accounts (e.g., WhatsApp with multiple phone numbers):
+
+### Configuration
+
+```json5
+{
+  "channels": {
+    "whatsapp": {
+      "accounts": [
+        {
+          "accountId": "15551234567",
+          "allowFrom": ["+19998887777"]
+        },
+        {
+          "accountId": "15559876543",
+          "allowFrom": ["+16665554444"]
+        }
+      ]
+    }
+  }
+}
+```
+
+### Storage
+
+Account-scoped pairing stores:
+
+- Format: `<channel>-<accountId>-allowFrom.json`
+- Example: `whatsapp-15551234567-allowFrom.json`
+
+### Backward Compatibility
+
+Legacy channel-level allowlists are still honored:
+
+```
+Effective allowlist = Account-scoped allowFrom + Legacy channel-level allowFrom
+```
+
+## Mutable Allowlist Detection
+
+SimpleClaw warns about allowlist entries that may change over time.
+
+### Discord Mutable Entries
+
+**Mutable** (may change):
+- `discord:` prefix without ID
+- `user:` prefix without ID
+- Bare usernames or display names
+
+**Stable** (recommended):
+- Numeric user IDs: `123456789012345678`
+- Mention format: `<@123456789012345678>`
+- PluralKit system IDs: `pk:abcdef` (if ID is included)
+
+### Slack Mutable Entries
+
+**Mutable**:
+- `slack:` or `user:` prefix without ID
+- Bare usernames or display names
+
+**Stable**:
+- User IDs: `U1234567890`
+- Mention format: `<@U1234567890>`
+
+### Google Chat Mutable Entries
+
+**Mutable**:
+- Email addresses (e.g., `user@example.com`)
+- Display names
+
+**Stable**:
+- User resource names: `users/123456789012345678`
+- With prefix: `googlechat:users/123456789012345678`
+
+### MS Teams Mutable Entries
+
+**Mutable**:
+- Email addresses
+- Display names with spaces
+
+**Stable**:
+- Object IDs (GUIDs)
+- Azure AD user IDs
+
+### Mattermost Mutable Entries
+
+**Mutable**:
+- Usernames (can be changed)
+
+**Stable**:
+- 26-character user IDs: `abcdefghijklmnopqrstuvwxyz`
+
+### IRC Mutable Entries
+
+**Mutable**:
+- Bare nicknames (can change)
+
+**Stable**:
+- NickServ account format: `nickname!user@host`
+
+## CLI Management
+
+### View Current Allowlist
+
+Read from pairing store:
+
+```bash
+# This reads ~/.openclaw/credentials/<channel>-allowFrom.json
+simpleclaw pairing list telegram
+```
+
+### Add to Allowlist
+
+Approve a pending pairing request:
+
+```bash
+simpleclaw pairing approve telegram AB3K9PQR
+```
+
+This adds the sender to the dynamic allowlist.
+
+### Remove from Allowlist
+
+Currently, removal requires manual editing:
+
+1. Edit `~/.openclaw/credentials/<channel>-allowFrom.json`
+2. Remove the sender ID from the `allowFrom` array
+3. Restart SimpleClaw or reload configuration
+
+**Note**: Configuration-based allowlists require editing `openclaw.json`/`openclaw.yaml`.
+
+## Security Audit Integration
+
+The `simpleclaw security audit` command checks allowlist configurations:
+
+### Detected Issues
+
+- **Wildcard allowlists**: Warns if `allowFrom: ["*"]` is used
+- **Mutable entries**: Warns if allowlist contains unstable identifiers
+- **Multi-user DM setups**: Flags configurations with multiple allowed senders
+- **Empty allowlists with `dmPolicy: allowlist`**: Critical finding
+
+### Example Audit Output
+
+```bash
+simpleclaw security audit
+```
+
+```
+[WARN] telegram: DM allowlist includes wildcard "*" (unrestricted access)
+[WARN] discord: Allowlist entry "discord:" is mutable and may change
+[INFO] whatsapp: Multi-user DM detected (3 allowed senders)
+```
+
+## Normalization
+
+SimpleClaw normalizes allowlist entries for matching:
+
+### Telegram
+
+- Strips `telegram:` and `user:` prefixes
+- Converts to string
+- Trims whitespace
+
+### Discord
+
+- Strips `discord:`, `user:`, `pk:` prefixes
+- Extracts ID from mention format `<@123>` or `<@!123>`
+- Trims whitespace
+
+### WhatsApp/Signal
+
+- Normalizes to E.164 format (`+15551234567`)
+- Adds `+` prefix if missing
+- Validates phone number format
+
+### Slack
+
+- Strips `slack:` and `user:` prefixes
+- Extracts ID from mention format `<@U123>`
+- Trims whitespace
+- Converts to uppercase for Slack IDs
+
+## Best Practices
+
+### 1. Use Stable Identifiers
+
+Prefer user IDs over usernames/display names:
+
+```json5
+// Good
+"allowFrom": ["123456789", "987654321"]
+
+// Avoid
+"allowFrom": ["username", "display name"]
+```
+
+### 2. Avoid Wildcards in Production
+
+Only use `["*"]` for testing or fully trusted environments:
+
+```json5
+// Development only
+"allowFrom": ["*"]
+
+// Production
+"allowFrom": ["123456789"]
+```
+
+### 3. Use `dmPolicy: "pairing"` for Personal Assistants
+
+Let SimpleClaw manage the allowlist via pairing:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "pairing",
+      "allowFrom": []  // Start empty, approve via pairing
+    }
+  }
+}
+```
+
+### 4. Use `dmPolicy: "allowlist"` for Locked-Down Setups
+
+Pre-configure all allowed users:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "allowlist",
+      "allowFrom": ["123456789", "987654321"]
+    }
+  }
+}
+```
+
+### 5. Separate Group and DM Access
+
+Use different policies for groups vs. DMs:
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "groupAllowFrom": ["123456789", "987654321"]
+    }
+  }
+}
+```
+
+### 6. Regular Audit
+
+Run security audits after configuration changes:
+
+```bash
+simpleclaw security audit
+simpleclaw security audit --fix  # Auto-fix some issues
+```
+
+## File Permissions
+
+Protect allowlist files with proper permissions:
+
+```bash
+chmod 600 ~/.openclaw/credentials/*-allowFrom.json
+chmod 600 ~/.openclaw/credentials/*-pairing.json
+```
+
+SimpleClaw's security audit will warn if permissions are too permissive.
+
+## Related Documentation
+
+- [DM Pairing System](/security/pairing)
+- [Security Overview](/security/overview)
+- [Channel Configuration](/channels/overview)
+- [Gateway Security](/security/overview)

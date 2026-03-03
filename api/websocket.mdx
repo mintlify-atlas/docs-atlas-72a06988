@@ -1,0 +1,398 @@
+---
+title: "WebSocket Protocol"
+description: "SimpleClaw Gateway WebSocket connection and framing protocol"
+---
+
+# WebSocket Protocol
+
+The SimpleClaw Gateway uses a binary WebSocket protocol for all client-server communication. The protocol supports request/response patterns and server-pushed events.
+
+## Connection Flow
+
+<Steps>
+  <Step title="Open WebSocket Connection">
+    Connect to the Gateway WebSocket endpoint:
+
+    ```typescript
+    const ws = new WebSocket('ws://127.0.0.1:18789');
+    ```
+
+    **Remote connections:** Use Tailscale Serve/Funnel for WSS:
+    ```typescript
+    const ws = new WebSocket('wss://gateway-name.tailnet.ts.net');
+    ```
+  </Step>
+
+  <Step title="Send Connect Frame">
+    Send a `ConnectParams` object as the first message:
+
+    ```json
+    {
+      "minProtocol": 1,
+      "maxProtocol": 1,
+      "client": {
+        "id": "web-ui",
+        "displayName": "Web Dashboard",
+        "version": "2026.3.1",
+        "platform": "web",
+        "mode": "interactive"
+      },
+      "caps": [],
+      "locale": "en-US"
+    }
+    ```
+  </Step>
+
+  <Step title="Receive Hello-OK">
+    Server responds with a `HelloOk` frame:
+
+    ```json
+    {
+      "type": "hello-ok",
+      "protocol": 1,
+      "server": {
+        "version": "2026.3.1",
+        "connId": "conn-abc123"
+      },
+      "features": {
+        "methods": ["chat.send", "sessions.list", ...],
+        "events": ["chat", "agent", "tick"]
+      },
+      "snapshot": {
+        "agents": [...],
+        "channels": [...]
+      },
+      "policy": {
+        "maxPayload": 10485760,
+        "maxBufferedBytes": 52428800,
+        "tickIntervalMs": 30000
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Send Requests">
+    After receiving `HelloOk`, send method calls as `RequestFrame`:
+
+    ```json
+    {
+      "type": "req",
+      "id": "req-001",
+      "method": "sessions.list",
+      "params": { "agentId": "main" }
+    }
+    ```
+  </Step>
+
+  <Step title="Receive Responses and Events">
+    The server sends:
+    - **Response frames** matching request IDs
+    - **Event frames** for asynchronous updates
+  </Step>
+</Steps>
+
+## Frame Types
+
+### Request Frame
+
+Client-to-server method invocation:
+
+```typescript
+interface RequestFrame {
+  type: "req";
+  id: string;           // Unique request ID (client-generated)
+  method: string;       // Method name (e.g., "sessions.list")
+  params?: unknown;     // Method parameters (optional)
+}
+```
+
+**Example:**
+
+```json
+{
+  "type": "req",
+  "id": "req-123",
+  "method": "config.get",
+  "params": { "path": "agent.model" }
+}
+```
+
+### Response Frame
+
+Server response to a request:
+
+```typescript
+interface ResponseFrame {
+  type: "res";
+  id: string;           // Matches request ID
+  ok: boolean;          // Success indicator
+  payload?: unknown;    // Result data (if ok=true)
+  error?: ErrorShape;   // Error details (if ok=false)
+}
+```
+
+**Success Example:**
+
+```json
+{
+  "type": "res",
+  "id": "req-123",
+  "ok": true,
+  "payload": { "agent": { "model": "anthropic/claude-opus-4-6" } }
+}
+```
+
+**Error Example:**
+
+```json
+{
+  "type": "res",
+  "id": "req-123",
+  "ok": false,
+  "error": {
+    "code": "INVALID_PARAMS",
+    "message": "path is required",
+    "retryable": false
+  }
+}
+```
+
+### Event Frame
+
+Server-pushed events (no request):
+
+```typescript
+interface EventFrame {
+  type: "event";
+  event: string;         // Event name (e.g., "chat", "tick")
+  payload?: unknown;     // Event data
+  seq?: number;          // Optional sequence number
+  stateVersion?: object; // Optional state version
+}
+```
+
+**Example:**
+
+```json
+{
+  "type": "event",
+  "event": "chat",
+  "seq": 42,
+  "payload": {
+    "sessionKey": "main",
+    "role": "assistant",
+    "text": "Hello! How can I help?"
+  }
+}
+```
+
+## Common Events
+
+### `chat` Event
+
+Agent conversation events:
+
+```typescript
+interface ChatEvent {
+  sessionKey: string;
+  role: "user" | "assistant" | "system";
+  text?: string;
+  tool?: string;
+  thinking?: string;
+  done?: boolean;
+}
+```
+
+### `agent` Event
+
+Agent state changes:
+
+```typescript
+interface AgentEvent {
+  agentId: string;
+  model?: string;
+  thinkingLevel?: string;
+  verboseLevel?: string;
+}
+```
+
+### `tick` Event
+
+Periodic heartbeat:
+
+```typescript
+interface TickEvent {
+  ts: number; // Unix timestamp (ms)
+}
+```
+
+### `shutdown` Event
+
+Gateway restart notification:
+
+```typescript
+interface ShutdownEvent {
+  reason: string;
+  restartExpectedMs?: number;
+}
+```
+
+## Error Codes
+
+Common error codes returned in `ErrorShape`:
+
+| Code | Description | Retryable |
+|------|-------------|----------|
+| `INVALID_PARAMS` | Invalid request parameters | No |
+| `METHOD_NOT_FOUND` | Unknown method | No |
+| `PERMISSION_DENIED` | Insufficient permissions | No |
+| `RATE_LIMITED` | Too many requests | Yes |
+| `TIMEOUT` | Request timed out | Yes |
+| `INTERNAL_ERROR` | Server error | Maybe |
+| `AGENT_NOT_FOUND` | Unknown agent ID | No |
+| `SESSION_NOT_FOUND` | Unknown session key | No |
+
+## Message Size Limits
+
+Default policy from `HelloOk`:
+
+```json
+{
+  "maxPayload": 10485760,       // 10MB per message
+  "maxBufferedBytes": 52428800, // 50MB total buffer
+  "tickIntervalMs": 30000       // 30s heartbeat
+}
+```
+
+Exceeding `maxPayload` returns `PAYLOAD_TOO_LARGE` error.
+
+## Client Implementation
+
+<CodeGroup>
+
+```typescript TypeScript
+import WebSocket from 'ws';
+
+class GatewayClient {
+  private ws: WebSocket;
+  private reqId = 0;
+  private pending = new Map<string, (res: ResponseFrame) => void>();
+
+  constructor(url: string) {
+    this.ws = new WebSocket(url);
+    this.ws.on('message', (data) => this.handleMessage(data));
+  }
+
+  async connect(clientInfo: ConnectParams): Promise<HelloOk> {
+    this.ws.send(JSON.stringify(clientInfo));
+    return new Promise((resolve) => {
+      this.ws.once('message', (data) => {
+        resolve(JSON.parse(data.toString()));
+      });
+    });
+  }
+
+  async request<T>(method: string, params?: unknown): Promise<T> {
+    const id = `req-${this.reqId++}`;
+    const frame: RequestFrame = { type: 'req', id, method, params };
+    
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, (res) => {
+        if (res.ok) {
+          resolve(res.payload as T);
+        } else {
+          reject(res.error);
+        }
+      });
+      this.ws.send(JSON.stringify(frame));
+    });
+  }
+
+  private handleMessage(data: WebSocket.Data) {
+    const frame = JSON.parse(data.toString());
+    
+    if (frame.type === 'res') {
+      const handler = this.pending.get(frame.id);
+      if (handler) {
+        handler(frame);
+        this.pending.delete(frame.id);
+      }
+    } else if (frame.type === 'event') {
+      this.emit(frame.event, frame.payload);
+    }
+  }
+}
+```
+
+```python Python
+import json
+import asyncio
+from websockets import connect
+
+class GatewayClient:
+    def __init__(self, url: str):
+        self.url = url
+        self.req_id = 0
+        self.pending = {}
+
+    async def connect(self, client_info: dict):
+        self.ws = await connect(self.url)
+        await self.ws.send(json.dumps(client_info))
+        hello = json.loads(await self.ws.recv())
+        return hello
+
+    async def request(self, method: str, params=None):
+        req_id = f"req-{self.req_id}"
+        self.req_id += 1
+        
+        frame = {
+            "type": "req",
+            "id": req_id,
+            "method": method,
+            "params": params
+        }
+        
+        future = asyncio.Future()
+        self.pending[req_id] = future
+        
+        await self.ws.send(json.dumps(frame))
+        return await future
+
+    async def handle_messages(self):
+        async for message in self.ws:
+            frame = json.loads(message)
+            
+            if frame["type"] == "res":
+                future = self.pending.pop(frame["id"])
+                if frame["ok"]:
+                    future.set_result(frame.get("payload"))
+                else:
+                    future.set_exception(Exception(frame["error"]))
+```
+
+</CodeGroup>
+
+## Reconnection Strategy
+
+<Steps>
+  <Step title="Exponential Backoff">
+    Retry with increasing delays: 1s, 2s, 4s, 8s, max 30s
+  </Step>
+  <Step title="Re-authenticate">
+    Send fresh `ConnectParams` after reconnect
+  </Step>
+  <Step title="Re-subscribe">
+    Restore any stateful subscriptions (e.g., log tailing)
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Protocol Reference" icon="book" href="/api/protocol">
+    Complete schema documentation for all methods
+  </Card>
+  <Card title="Build a Client" icon="code" href="/api/plugin-sdk">
+    SDK reference for custom integrations
+  </Card>
+</CardGroup>

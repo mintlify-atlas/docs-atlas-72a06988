@@ -1,0 +1,294 @@
+---
+title: "macOS"
+description: "SimpleClaw macOS menu bar app with gateway hosting and native features"
+---
+
+The SimpleClaw macOS app is a native menu bar application that hosts the SimpleClaw Gateway and provides deep macOS integration.
+
+## Overview
+
+The macOS app is the primary platform for running SimpleClaw on desktop. It includes:
+
+- **Gateway hosting** - runs the SimpleClaw Gateway process locally
+- **Menu bar interface** - quick access to settings, sessions, and controls
+- **Voice Wake** - always-on voice activation with speech recognition
+- **Talk Mode** - voice conversation with audio playback
+- **Canvas** - agent-driven visual workspace with WebKit rendering
+- **System integration** - screen capture, camera, microphone, location, and AppleScript automation
+
+## System Requirements
+
+- **macOS 15.0** or later (Sequoia+)
+- **Apple Silicon** or Intel processor
+- Code signing with Developer ID, Apple Distribution, or Apple Development certificate
+
+## Installation
+
+### Download
+
+Download the latest release from the [SimpleClaw releases page](https://github.com/simpleclaw/simpleclaw/releases).
+
+The macOS app is distributed as:
+- `SimpleClaw.app` - signed and notarized application bundle
+- `SimpleClaw.dmg` - disk image installer
+- `SimpleClaw.zip` - compressed app bundle
+
+### Building from Source
+
+To build the macOS app from source:
+
+```bash
+# Clone the repository
+git clone https://github.com/simpleclaw/simpleclaw.git
+cd simpleclaw
+
+# Install dependencies
+pnpm install
+
+# Quick dev run (ad-hoc signing, TCC permissions do not stick)
+scripts/restart-mac.sh --no-sign
+
+# Dev run with code signing (requires certificate)
+scripts/restart-mac.sh --sign
+
+# Package for distribution
+scripts/package-mac-app.sh
+```
+
+The packaged app will be created at `dist/SimpleClaw.app`.
+
+## Features
+
+### Gateway Hosting
+
+The macOS app hosts the SimpleClaw Gateway process, which:
+- Manages WebSocket connections to messaging channels
+- Routes messages to AI agents
+- Executes tools and handles sessions
+- Provides the Control UI web interface
+
+The gateway runs as part of the menu bar app and starts automatically when the app launches.
+
+### Voice Wake
+
+Voice Wake enables hands-free interaction with your assistant:
+
+- **Always-on listening** - detects wake words in the background
+- **Speech recognition** - uses macOS speech recognition APIs
+- **Custom wake words** - configure trigger phrases in settings
+- **Privacy-focused** - all processing happens locally on device
+
+**Required permissions:**
+- Microphone access
+- Speech recognition
+
+### Talk Mode
+
+Talk Mode provides voice conversation:
+
+- **Push-to-talk** - hold hotkey to record voice input
+- **Voice responses** - audio playback of assistant replies
+- **Audio streaming** - real-time voice synthesis
+- **ElevenLabs integration** - high-quality text-to-speech
+
+### Canvas
+
+The Canvas is an agent-controlled visual workspace:
+
+- **WebKit rendering** - full web content support
+- **Agent-to-UI (A2UI)** - agents can navigate, evaluate JavaScript, and take snapshots
+- **Custom schemes** - `simpleclaw://` URL scheme for local resources
+- **Window management** - programmatic control of size, position, and visibility
+
+### Camera & Screen Capture
+
+The app provides camera and screen capture tools:
+
+- **Camera snap** - capture still photos
+- **Camera clip** - record short video clips with optional audio
+- **Screen capture** - take screenshots for agent context
+
+**Required permissions:**
+- Camera access
+- Screen Recording permission
+
+### System Automation
+
+The app integrates with macOS automation:
+
+- **AppleScript** - drive Terminal and other apps
+- **Location services** - share device location
+- **Notifications** - display alerts for agent actions
+
+**Required permissions:**
+- Automation (AppleScript)
+- Location (when in use)
+- Notifications
+
+## Configuration
+
+### Settings Interface
+
+Access settings through the menu bar icon:
+
+1. Click the SimpleClaw menu bar icon
+2. Select **Settings**
+3. Configure:
+   - Gateway connection
+   - Voice Wake settings
+   - Channel configurations
+   - Agent routing
+   - Skills and extensions
+
+### Deep Links
+
+The app supports the `simpleclaw://` URL scheme for deep linking:
+
+```bash
+open "simpleclaw://pair?code=ABC123"
+```
+
+## Permissions
+
+The macOS app requires several system permissions:
+
+| Permission | Purpose | Required |
+|------------|---------|----------|
+| **Microphone** | Voice Wake and Talk Mode | Yes (for voice) |
+| **Speech Recognition** | Wake word detection | Yes (for Voice Wake) |
+| **Camera** | Photo and video capture | Optional |
+| **Screen Recording** | Screenshot capture | Optional |
+| **Automation (AppleScript)** | System automation | Optional |
+| **Location** | Location sharing | Optional |
+| **Notifications** | Agent alerts | Optional |
+
+Permissions are requested when first needed. Grant permissions in **System Settings > Privacy & Security**.
+
+## Code Signing
+
+### Development Signing
+
+For local development:
+
+```bash
+# Ad-hoc signing (fastest, but TCC permissions do not persist)
+scripts/restart-mac.sh --no-sign
+
+# With code signing certificate
+scripts/restart-mac.sh --sign
+```
+
+### Release Signing
+
+The packaging script auto-selects a signing identity:
+
+1. Developer ID Application (preferred for distribution)
+2. Apple Distribution
+3. Apple Development
+4. First available identity
+
+**Environment variables:**
+
+```bash
+# Specify signing identity
+SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" scripts/package-mac-app.sh
+
+# Allow ad-hoc signing (dev only)
+ALLOW_ADHOC_SIGNING=1 scripts/package-mac-app.sh
+
+# Disable library validation (dev only, for Sparkle mismatches)
+DISABLE_LIBRARY_VALIDATION=1 scripts/package-mac-app.sh
+
+# Skip Team ID audit
+SKIP_TEAM_ID_CHECK=1 scripts/package-mac-app.sh
+```
+
+### Team ID Audit
+
+After signing, the build verifies that all embedded binaries share the same Team ID. This prevents Sparkle update framework mismatches.
+
+Skip the audit for development builds:
+
+```bash
+SKIP_TEAM_ID_CHECK=1 scripts/package-mac-app.sh
+```
+
+## Troubleshooting
+
+### Gateway Not Starting
+
+If the gateway fails to start:
+
+1. Check logs with `./scripts/clawlog.sh`
+2. Verify permissions in System Settings
+3. Ensure port 18789 is available
+4. Try restarting the app
+
+### TCC Permissions Not Sticking
+
+If permissions reset after restart:
+
+- Use proper code signing (not ad-hoc)
+- Sign with a Developer ID or Apple Development certificate
+- Avoid the `--no-sign` flag for persistent permissions
+
+### Voice Wake Not Working
+
+If Voice Wake fails to activate:
+
+1. Grant Microphone permission
+2. Grant Speech Recognition permission
+3. Check Voice Wake settings in the app
+4. Verify wake word configuration
+5. Test microphone input in System Settings
+
+## Development
+
+### Project Structure
+
+The macOS app source is located at `apps/macos/`:
+
+```
+apps/macos/
+├── Sources/OpenClaw/          # Swift source files
+│   ├── Resources/             # Info.plist, assets
+│   ├── AppState.swift         # Main app state
+│   ├── GatewayProcessManager.swift  # Gateway lifecycle
+│   ├── VoiceWakeManager.swift # Voice Wake implementation
+│   ├── CanvasManager.swift    # Canvas window management
+│   └── ...
+├── Tests/                     # Unit tests
+└── OpenClaw.xcodeproj/        # Xcode project
+```
+
+### Quick Development Loop
+
+For rapid iteration:
+
+```bash
+# From repo root
+scripts/restart-mac.sh
+```
+
+This script:
+1. Kills any running SimpleClaw process
+2. Rebuilds the app
+3. Code signs (if certificates available)
+4. Launches the new build
+
+### Running Tests
+
+Run the test suite:
+
+```bash
+cd apps/macos
+xcodebuild test -scheme OpenClaw -destination 'platform=macOS'
+```
+
+## Related Documentation
+
+- [Gateway Configuration](/configuration)
+- [Voice Wake](/features/voice#voice-wake)
+- [Talk Mode](/features/voice#talk-mode)
+- [Canvas](/features/canvas)
+- [Nodes](/features/voice)

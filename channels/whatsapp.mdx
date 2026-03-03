@@ -1,0 +1,356 @@
+---
+title: WhatsApp
+description: Connect SimpleClaw to WhatsApp using WhatsApp Web protocol
+icon: whatsapp
+---
+
+SimpleClaw connects to WhatsApp using the WhatsApp Web protocol, providing a seamless integration with your WhatsApp account.
+
+## Features
+
+- Direct messaging and group chats
+- Media support (images, videos, documents)
+- Polls and reactions
+- Multi-device support via WhatsApp Web
+- QR code authentication
+
+## Setup
+
+<Steps>
+  <Step title="Enable WhatsApp Channel">
+    WhatsApp uses the web provider which must be enabled:
+    
+    ```bash
+    simpleclaw config set web.enabled true
+    ```
+  </Step>
+  
+  <Step title="Login with QR Code">
+    Start the login process to authenticate with WhatsApp:
+    
+    ```bash
+    simpleclaw login whatsapp
+    ```
+    
+    A QR code will be displayed in your terminal. Scan it with WhatsApp on your phone:
+    1. Open WhatsApp on your phone
+    2. Go to Settings → Linked Devices
+    3. Tap "Link a Device"
+    4. Scan the QR code shown in the terminal
+  </Step>
+  
+  <Step title="Verify Connection">
+    Check that WhatsApp is connected:
+    
+    ```bash
+    simpleclaw channels status
+    ```
+    
+    You should see WhatsApp listed as "linked" and "running".
+  </Step>
+  
+  <Step title="Configure Account (Optional)">
+    For multi-account setups, you can configure named accounts:
+    
+    ```yaml
+    channels:
+      whatsapp:
+        accounts:
+          personal:
+            enabled: true
+            name: "Personal WhatsApp"
+            authDir: "/path/to/auth/dir"
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+### Basic Configuration
+
+```yaml
+web:
+  enabled: true  # WhatsApp requires web provider
+
+channels:
+  whatsapp:
+    enabled: true
+```
+
+### Account Configuration
+
+```yaml
+channels:
+  whatsapp:
+    accounts:
+      default:
+        enabled: true
+        name: "My WhatsApp"
+        dmPolicy: pairing  # Require pairing for DMs
+        allowFrom:
+          - "+1234567890"  # E.164 format phone numbers
+```
+
+### Group Settings
+
+```yaml
+channels:
+  whatsapp:
+    groupPolicy: allowlist
+    groups:
+      "group-jid@g.us":
+        requireMention: true
+        toolPolicy: default
+```
+
+## Authentication
+
+### QR Code Login
+
+The primary authentication method uses WhatsApp Web QR codes:
+
+```bash
+# Login with default account
+simpleclaw login whatsapp
+
+# Login with named account
+simpleclaw login whatsapp --account personal
+
+# Force re-login
+simpleclaw login whatsapp --force
+```
+
+### Multi-Account Setup
+
+To use multiple WhatsApp accounts simultaneously:
+
+```yaml
+channels:
+  whatsapp:
+    accounts:
+      personal:
+        enabled: true
+        authDir: "~/.simpleclaw/whatsapp/personal"
+      work:
+        enabled: true
+        authDir: "~/.simpleclaw/whatsapp/work"
+```
+
+Login each account separately:
+
+```bash
+simpleclaw login whatsapp --account personal
+simpleclaw login whatsapp --account work
+```
+
+## Security
+
+### DM Policy
+
+Control who can send direct messages:
+
+```yaml
+channels:
+  whatsapp:
+    dmPolicy: pairing  # Options: open, pairing, allowlist, off
+    allowFrom:
+      - "+1234567890"  # Approved phone numbers (E.164 format)
+```
+
+### Group Policy
+
+Manage group chat access:
+
+```yaml
+channels:
+  whatsapp:
+    groupPolicy: allowlist  # Options: allowlist, open, off
+    groups:
+      "120363123456789012@g.us":
+        requireMention: true  # Must mention bot to trigger
+        allowFrom:  # Additional sender restrictions
+          - "+1234567890"
+```
+
+### Pairing Workflow
+
+With `dmPolicy: pairing`, users must be approved:
+
+1. User sends first message
+2. You receive pairing request
+3. Approve with: `simpleclaw pairing approve whatsapp +1234567890`
+4. User receives approval notification
+
+## Message Features
+
+### Sending Messages
+
+Send messages via CLI:
+
+```bash
+# Send text message
+simpleclaw message send whatsapp +1234567890 "Hello from SimpleClaw!"
+
+# Send with media
+simpleclaw message send whatsapp +1234567890 "Check this out" --media-url "https://example.com/image.jpg"
+
+# Send to group
+simpleclaw message send whatsapp "120363123456789012@g.us" "Group message"
+```
+
+### Reactions
+
+React to messages using the `react` action:
+
+```yaml
+channels:
+  whatsapp:
+    actions:
+      reactions: true  # Enable reaction support
+```
+
+### Polls
+
+Create polls in WhatsApp:
+
+```yaml
+channels:
+  whatsapp:
+    actions:
+      polls: true  # Enable poll creation
+```
+
+Polls support up to 12 options.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="QR Code Not Displaying">
+    Ensure your terminal supports rendering images or use verbose mode:
+    
+    ```bash
+    simpleclaw login whatsapp --verbose
+    ```
+  </Accordion>
+  
+  <Accordion title="Connection Keeps Dropping">
+    Check the WhatsApp Web session:
+    
+    ```bash
+    simpleclaw channels status --deep
+    ```
+    
+    If authentication is expired, re-login:
+    
+    ```bash
+    simpleclaw login whatsapp --force
+    ```
+  </Accordion>
+  
+  <Accordion title="Messages Not Received">
+    Verify the gateway is running and WhatsApp is connected:
+    
+    ```bash
+    simpleclaw channels status
+    ```
+    
+    Check that `web.enabled` is set to `true`:
+    
+    ```bash
+    simpleclaw config get web.enabled
+    ```
+  </Accordion>
+  
+  <Accordion title="Group Messages Not Working">
+    Ensure the bot is added to the group and `groupPolicy` allows the group:
+    
+    ```yaml
+    channels:
+      whatsapp:
+        groupPolicy: allowlist
+        groups:
+          "group-jid@g.us":
+            requireMention: true
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Configuration
+
+### Message Chunking
+
+WhatsApp has a 4000 character limit. SimpleClaw automatically chunks longer messages:
+
+```yaml
+channels:
+  whatsapp:
+    # Chunking is automatic, no configuration needed
+```
+
+### Media Handling
+
+```yaml
+channels:
+  whatsapp:
+    gifPlayback: true  # Auto-play GIFs
+```
+
+### Default Recipient
+
+```yaml
+channels:
+  whatsapp:
+    defaultTo: "+1234567890"  # Default recipient for outbound messages
+```
+
+## CLI Commands
+
+```bash
+# Login
+simpleclaw login whatsapp
+
+# Logout
+simpleclaw logout whatsapp
+
+# Status
+simpleclaw channels status whatsapp
+
+# Send message
+simpleclaw message send whatsapp <recipient> <message>
+
+# Pairing
+simpleclaw pairing approve whatsapp +1234567890
+simpleclaw pairing list whatsapp
+```
+
+## API Reference
+
+WhatsApp channel implementation: `extensions/whatsapp/src/channel.ts`
+
+### Channel ID
+
+`whatsapp`
+
+### Target ID Format
+
+- Phone numbers: E.164 format (e.g., `+1234567890`)
+- Groups: JID format (e.g., `120363123456789012@g.us`)
+
+### Capabilities
+
+- Chat types: `direct`, `group`
+- Features: `polls`, `reactions`, `media`
+- Delivery mode: `gateway`
+- Text chunk limit: 4000 characters
+- Poll max options: 12
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Configuration" icon="shield" href="/security">
+    Configure DM policies and allowlists
+  </Card>
+  <Card title="Multi-Channel Setup" icon="network-wired" href="/channels/overview">
+    Connect additional messaging platforms
+  </Card>
+</CardGroup>

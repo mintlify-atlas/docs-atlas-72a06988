@@ -1,0 +1,290 @@
+---
+title: DM Pairing System
+summary: Explicit owner approval for who can message your SimpleClaw assistant
+---
+
+# DM Pairing System
+
+The DM pairing system provides **explicit owner approval** for who is allowed to send direct messages to your SimpleClaw assistant. When enabled, unknown senders receive a pairing code and their messages are held until you approve them.
+
+## How DM Pairing Works
+
+### Pairing Flow
+
+1. **Unknown sender messages your assistant**: A sender not in your allowlist sends a message
+2. **Pairing code generated**: SimpleClaw generates an 8-character pairing code
+3. **Code sent to sender**: The sender receives the pairing code (not their message)
+4. **Owner approves**: You review the pending request and approve it with the code
+5. **Sender added to allowlist**: Once approved, the sender can message your assistant normally
+
+### Pairing Code Format
+
+- **Length**: 8 characters
+- **Character set**: Uppercase letters and numbers (A-Z, 2-9)
+- **Excluded characters**: No ambiguous characters (`0`, `O`, `1`, `I`)
+- **Example**: `AB3K9PQR`
+
+### Code Expiration
+
+- Pairing codes **expire after 1 hour**
+- SimpleClaw only sends the pairing message when a **new request** is created
+- If the code expires, the sender must send another message to get a new code
+- Pending requests are capped at **3 per channel** by default
+- Additional requests are ignored until existing ones expire or are approved
+
+## DM Policy Modes
+
+SimpleClaw supports multiple DM access policies:
+
+### `pairing` (Default)
+
+- **Behavior**: Unknown senders get a pairing code and must be explicitly approved
+- **Use case**: Personal assistant with controlled access
+- **Security**: High - explicit approval required
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "pairing"
+    }
+  }
+}
+```
+
+### `allowlist`
+
+- **Behavior**: Only pre-configured senders in `allowFrom` list can message
+- **Use case**: Locked-down environments with known users only
+- **Security**: Highest - no pairing flow, hard allowlist only
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "allowlist",
+      "allowFrom": ["telegram:123456789", "telegram:987654321"]
+    }
+  }
+}
+```
+
+### `open`
+
+- **Behavior**: All senders can message without approval
+- **Use case**: Public bots or fully trusted environments
+- **Security**: Low - no access control
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "open"
+    }
+  }
+}
+```
+
+### `disabled`
+
+- **Behavior**: All direct messages are blocked
+- **Use case**: Group-only bots
+- **Security**: High - DMs completely disabled
+
+```json5
+{
+  "channels": {
+    "telegram": {
+      "dmPolicy": "disabled"
+    }
+  }
+}
+```
+
+## CLI Commands
+
+### List Pending Pairing Requests
+
+View all pending pairing requests for a channel:
+
+```bash
+simpleclaw pairing list telegram
+simpleclaw pairing list whatsapp
+simpleclaw pairing list signal
+simpleclaw pairing list discord
+simpleclaw pairing list slack
+```
+
+### Approve a Pairing Request
+
+Approve a sender using their pairing code:
+
+```bash
+simpleclaw pairing approve telegram AB3K9PQR
+simpleclaw pairing approve whatsapp XY7M2NQW
+```
+
+Once approved, the sender is:
+- Added to the channel's allowlist store
+- Can send messages normally
+- Persisted across SimpleClaw restarts
+
+### Supported Channels
+
+Pairing is supported on these channels:
+
+- `telegram`
+- `whatsapp`
+- `signal`
+- `imessage`
+- `discord`
+- `slack`
+- `feishu`
+
+## Storage
+
+Pairing state is stored under `~/.openclaw/credentials/`:
+
+### Pending Requests
+
+- **File**: `<channel>-pairing.json`
+- **Format**: Array of pending pairing requests
+- **Data**:
+  - `id`: Sender identifier
+  - `code`: 8-character pairing code
+  - `createdAt`: ISO timestamp when request was created
+  - `lastSeenAt`: ISO timestamp when sender last attempted to message
+  - `meta`: Optional metadata (account ID, etc.)
+
+Example: `~/.openclaw/credentials/telegram-pairing.json`
+
+```json
+{
+  "version": 1,
+  "requests": [
+    {
+      "id": "123456789",
+      "code": "AB3K9PQR",
+      "createdAt": "2026-03-03T10:15:00.000Z",
+      "lastSeenAt": "2026-03-03T10:15:00.000Z"
+    }
+  ]
+}
+```
+
+### Approved Allowlist
+
+- **File**: `<channel>-allowFrom.json`
+- **Format**: Array of approved sender IDs
+- **Scope**: Can be channel-level or account-level
+
+Example: `~/.openclaw/credentials/telegram-allowFrom.json`
+
+```json
+{
+  "version": 1,
+  "allowFrom": [
+    "123456789",
+    "987654321"
+  ]
+}
+```
+
+### Account-Scoped Allowlists
+
+For channels with multiple accounts, allowlists can be scoped:
+
+- **Format**: `<channel>-<accountId>-allowFrom.json`
+- **Example**: `whatsapp-15551234567-allowFrom.json`
+- **Backward compatibility**: Legacy channel-level allowlists are still honored
+
+## Security Considerations
+
+### Treat as Sensitive
+
+Pairing files gate access to your assistant:
+
+- Store `*-pairing.json` and `*-allowFrom.json` as sensitive
+- Protect `~/.openclaw/credentials/` with proper file permissions
+- Do not share pairing codes publicly
+
+### Pairing Code Security
+
+- Codes are cryptographically random (using `crypto.randomInt()`)
+- Collision resistance: Up to 500 attempts to generate unique code
+- Codes are uppercase-only for easy manual entry
+- No ambiguous characters to prevent transcription errors
+
+### File Locking
+
+The pairing store uses file locking to prevent race conditions:
+
+- Lock retries: 10 attempts with exponential backoff
+- Stale lock timeout: 30 seconds
+- Atomic writes via `writeJsonFileAtomically()`
+
+### Auto-Pruning
+
+Pending requests are automatically cleaned:
+
+- **Expired requests**: Removed after 1 hour
+- **Excess requests**: Only most recent 3 kept per channel
+- Pruning happens during:
+  - List operations
+  - Approval operations
+  - New pairing request creation
+
+## Device Pairing
+
+SimpleClaw also supports **device pairing** for nodes (iOS/Android/remote devices). This is separate from DM pairing.
+
+### Device Pairing Flow
+
+1. Node connects to Gateway and requests pairing
+2. Gateway stores pending request and emits `node.pair.requested` event
+3. Owner approves via CLI or UI
+4. Gateway issues new authentication token
+5. Node reconnects with token and is now paired
+
+See [Device Pairing Commands](/security/pairing#device-pairing-commands) for CLI usage.
+
+### Device Pairing via Telegram
+
+You can pair devices entirely from Telegram using the `device-pair` plugin:
+
+1. In Telegram: `/pair`
+2. Bot sends setup code (base64-encoded JSON with URL and token)
+3. On device: Paste setup code in SimpleClaw app → Settings → Gateway
+4. Back in Telegram: `/pair approve`
+
+### Device Pairing Storage
+
+Stored under `~/.openclaw/devices/`:
+
+- `pending.json`: Pending device pairing requests (expire after 5 minutes)
+- `paired.json`: Paired devices with authentication tokens
+
+### Device Pairing Commands
+
+```bash
+simpleclaw devices list
+simpleclaw devices approve <requestId>
+simpleclaw devices reject <requestId>
+```
+
+## Integration with Allowlists
+
+When you approve a pairing request:
+
+1. Request is removed from `<channel>-pairing.json`
+2. Sender ID is added to `<channel>-allowFrom.json` (or account-scoped variant)
+3. Future messages from that sender are allowed without pairing
+
+See [Allowlist Configuration](/security/allowlists) for managing approved senders.
+
+## Related Documentation
+
+- [Security Overview](/security/overview)
+- [Allowlist Configuration](/security/allowlists)
+- [Channel Configuration](/channels/overview)
+- [Gateway Security](/security/overview)

@@ -1,0 +1,399 @@
+---
+title: "Android"
+description: "SimpleClaw Android app with gateway connectivity and mobile features"
+---
+
+The SimpleClaw Android app connects to a SimpleClaw Gateway as a mobile node, providing access to Android device sensors and capabilities.
+
+<Warning>
+**Extremely Alpha Status**
+
+The Android app is being rebuilt from the ground up. Expect breaking changes and incomplete features.
+</Warning>
+
+## Overview
+
+The Android app provides mobile access to your SimpleClaw assistant:
+
+- **Gateway connection** - connects to your SimpleClaw Gateway via WiFi or cellular
+- **Chat interface** - modern Compose UI for conversations
+- **Voice Wake** - hands-free voice activation
+- **Talk Mode** - voice conversations with audio responses
+- **Camera access** - photo and video capture
+- **Screen recording** - capture screen content via MediaProjection
+- **Location services** - share device location
+- **SMS** - send and manage text messages
+- **Canvas** - view agent-controlled web content
+
+## System Requirements
+
+- **Android 12.0 (API 31)** or later
+- **Android Studio** (for building from source)
+- USB debugging enabled (for development)
+
+## Installation
+
+<Warning>
+No Play Store release available. The Android app must be built and installed manually.
+</Warning>
+
+### Prerequisites
+
+1. **Android Studio** - Latest stable version
+2. **Android SDK** - Installed via Android Studio or standalone
+3. **USB debugging** - Enabled on your Android device
+
+### Build from Source
+
+From the repository root:
+
+```bash
+cd apps/android
+
+# Build debug APK
+./gradlew :app:assembleDebug
+
+# Install to connected device
+./gradlew :app:installDebug
+
+# Run tests
+./gradlew :app:testDebugUnitTest
+```
+
+Or use pnpm shortcuts:
+
+```bash
+pnpm android:install
+pnpm android:run
+```
+
+### Install on Device via USB
+
+1. Enable **Developer Options** on your Android device:
+   - Go to **Settings > About Phone**
+   - Tap **Build Number** 7 times
+2. Enable **USB Debugging**:
+   - Go to **Settings > Developer Options**
+   - Enable **USB Debugging**
+3. Connect device via USB
+4. Accept debugging authorization prompt on device
+5. Verify connection:
+   ```bash
+   adb devices -l
+   ```
+6. Install and run:
+   ```bash
+   pnpm android:install
+   pnpm android:run
+   ```
+
+If `adb devices` shows `unauthorized`, reconnect USB and accept the trust prompt.
+
+### Open in Android Studio
+
+To open the project:
+
+1. Launch Android Studio
+2. Select **Open**
+3. Navigate to `apps/android`
+4. Wait for Gradle sync to complete
+5. Select your device or emulator
+6. Click **Run** (▶)
+
+## Features
+
+### Gateway Connection
+
+Connect to your SimpleClaw Gateway:
+
+**Setup Code mode:**
+- Enter setup code from gateway
+- Automatic pairing flow
+- Encrypted credential storage
+
+**Manual mode:**
+- Specify host and port
+- TLS on/off toggle
+- Fingerprint verification
+
+**Pairing flow:**
+1. Open app **Connect** tab
+2. Choose **Setup Code** or **Manual**
+3. Enter connection details
+4. Approve on gateway:
+   ```bash
+   simpleclaw nodes pending
+   simpleclaw nodes approve <requestId>
+   ```
+
+### Chat Interface
+
+Modern Jetpack Compose UI:
+
+- Message list with markdown rendering
+- Text composer with send button
+- Session filters and management
+- Thinking indicator
+- Error states
+
+### Voice Wake & Talk
+
+**Voice Wake:**
+- Wake word detection
+- Background listening
+- Microphone permission required
+
+**Talk Mode:**
+- Push-to-talk recording
+- Audio streaming playback
+- Microphone permission required
+
+### Camera & Screen
+
+**Camera capture:**
+- `camera.snap` - capture photos
+- `camera.clip` - record video with optional audio
+- JPEG size limiting to respect bandwidth
+
+**Screen recording:**
+- `screen.record` - capture screen via MediaProjection
+- User consent required per session
+- Foreground service notification shown
+
+**Required permissions:**
+- `CAMERA` - for photo/video
+- `RECORD_AUDIO` - for video with audio
+
+### Location Services
+
+Share device location:
+
+- One-time location requests
+- Background location updates
+- Geofencing support
+
+**Required permissions:**
+- `ACCESS_FINE_LOCATION` - precise location
+- `ACCESS_COARSE_LOCATION` - approximate location
+- `ACCESS_BACKGROUND_LOCATION` - background updates
+
+### SMS Management
+
+Send and manage text messages:
+
+- `sms.send` - send SMS to contacts
+- `sms.list` - retrieve message history
+
+**Required permission:**
+- `SEND_SMS`
+
+### Canvas
+
+WebView-based canvas for agent content:
+
+- Navigate to URLs
+- Evaluate JavaScript
+- Capture snapshots
+- Live reload support when served from gateway
+
+## Permissions
+
+The Android app declares these permissions:
+
+| Permission | Purpose | Required |
+|------------|---------|----------|
+| **INTERNET** | Gateway connection | Yes |
+| **ACCESS_NETWORK_STATE** | Network monitoring | Yes |
+| **FOREGROUND_SERVICE** | Background operation | Yes |
+| **FOREGROUND_SERVICE_DATA_SYNC** | Gateway sync | Yes |
+| **FOREGROUND_SERVICE_MICROPHONE** | Voice recording | Optional |
+| **FOREGROUND_SERVICE_MEDIA_PROJECTION** | Screen recording | Optional |
+| **POST_NOTIFICATIONS** | Android 13+ notifications | Optional |
+| **NEARBY_WIFI_DEVICES** | Discovery (Android 13+) | Optional |
+| **ACCESS_FINE_LOCATION** | Location (Android 12-) | Optional |
+| **ACCESS_COARSE_LOCATION** | Approximate location | Optional |
+| **ACCESS_BACKGROUND_LOCATION** | Background location | Optional |
+| **CAMERA** | Photo/video capture | Optional |
+| **RECORD_AUDIO** | Audio recording | Optional |
+| **SEND_SMS** | SMS sending | Optional |
+
+Permissions are requested at runtime when needed.
+
+## Discovery
+
+Gateway discovery uses Network Service Discovery (NSD):
+
+**Android 13+ (API 33+):**
+- Requires `NEARBY_WIFI_DEVICES` permission
+- No location permission needed
+
+**Android 12 and below:**
+- Requires `ACCESS_FINE_LOCATION` permission
+- Location needed for WiFi scanning
+
+## USB Tunnel Testing
+
+Test gateway connection without LAN access using ADB reverse tunnel:
+
+**Terminal A (start gateway):**
+```bash
+pnpm simpleclaw gateway --port 18789 --verbose
+```
+
+**Terminal B (create tunnel):**
+```bash
+adb reverse tcp:18789 tcp:18789
+```
+
+**In app (Connect > Manual):**
+- Host: `127.0.0.1`
+- Port: `18789`
+- TLS: off
+
+This routes Android localhost to your laptop gateway.
+
+## Hot Reload
+
+The app is native Kotlin with Jetpack Compose:
+
+**Live Edit:**
+- Edit Compose UI code
+- Use Android Studio **Live Edit**
+- Changes apply instantly on physical devices (API 31+)
+
+**Apply Changes:**
+- For many code/resource changes
+- Use **Apply Changes** (⌃⌘R)
+- Faster than full reinstall
+
+**Full Reinstall:**
+- Required for structural changes
+- Manifest updates
+- Gradle configuration
+- Native code changes
+
+**Canvas Live Reload:**
+- Canvas content served from gateway `__simpleclaw__/canvas/`
+- Auto-reloads when gateway updates content
+
+## Development Status
+
+### Completed
+
+- ✅ 4-step onboarding flow
+- ✅ Connect tab with Setup Code and Manual modes
+- ✅ Encrypted persistence for gateway setup/auth
+- ✅ Chat UI restyled with Compose
+- ✅ Settings UI restyled and de-duplicated
+
+### In Progress
+
+- ⏳ QR code scanning in onboarding
+- ⏳ Performance improvements
+- ⏳ Streaming support in chat UI
+- ⏳ Permission request flows
+- ⏳ Push notifications
+- ⏳ Security hardening (biometric lock, token handling)
+- ⏳ Voice tab full functionality
+- ⏳ Screen tab full functionality
+- ⏳ End-to-end QA and release hardening
+
+## Troubleshooting
+
+### Build Errors
+
+If Gradle build fails:
+
+1. Sync Gradle: **File > Sync Project with Gradle Files**
+2. Clean build: `./gradlew clean`
+3. Invalidate caches: **File > Invalidate Caches > Invalidate and Restart**
+4. Check Android SDK location: `~/Library/Android/sdk` (macOS)
+
+### ADB Connection Issues
+
+If `adb devices` shows no devices:
+
+1. Check USB cable (use data cable, not charge-only)
+2. Re-enable USB debugging on device
+3. Try different USB port
+4. Restart ADB server:
+   ```bash
+   adb kill-server
+   adb start-server
+   ```
+
+### Gateway Connection Fails
+
+If connection to gateway fails:
+
+1. Verify gateway is running: `simpleclaw gateway status`
+2. Check firewall allows port 18789
+3. Verify both devices on same network (for discovery)
+4. Try manual connection with IP address
+5. Check app logs in Android Studio Logcat
+
+### Discovery Not Working
+
+If gateway discovery fails:
+
+1. Grant `NEARBY_WIFI_DEVICES` (Android 13+) or `ACCESS_FINE_LOCATION` (Android 12-)
+2. Verify both devices on same WiFi network
+3. Check router allows mDNS/Bonjour traffic
+4. Try manual connection instead
+
+## Development
+
+### Project Structure
+
+```
+apps/android/
+├── app/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/ai/simpleclaw/android/
+│   │   │   │   ├── MainActivity.kt
+│   │   │   │   ├── NodeApp.kt
+│   │   │   │   ├── NodeForegroundService.kt
+│   │   │   │   ├── ui/              # Compose UI screens
+│   │   │   │   ├── gateway/         # Gateway connection
+│   │   │   │   ├── node/            # Node handlers
+│   │   │   │   ├── voice/           # Voice Wake & Talk
+│   │   │   │   └── ...
+│   │   │   ├── res/                 # Resources
+│   │   │   └── AndroidManifest.xml
+│   │   └── test/                    # Unit tests
+│   └── build.gradle.kts             # App build config
+├── build.gradle.kts                 # Project build config
+├── settings.gradle.kts              # Gradle settings
+└── gradlew                          # Gradle wrapper
+```
+
+### Code Style
+
+The project follows Kotlin style guidelines:
+
+- See `apps/android/style.md` for conventions
+- Use Android Studio auto-formatting
+- Run `./gradlew ktlintFormat` before commits
+
+### Running Tests
+
+```bash
+# Unit tests
+./gradlew :app:testDebugUnitTest
+
+# Instrumented tests (requires device/emulator)
+./gradlew :app:connectedAndroidTest
+```
+
+### Maintainer
+
+@obviyus - For issues, questions, or contributions, open an issue or reach out on Discord.
+
+## Related Documentation
+
+- [Nodes](/features/voice)
+- [Voice Wake](/features/voice#voice-wake)
+- [Talk Mode](/features/voice#talk-mode)
+- [Gateway Configuration](/configuration)
+

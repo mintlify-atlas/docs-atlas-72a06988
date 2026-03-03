@@ -1,0 +1,362 @@
+---
+title: Live Canvas & A2UI
+description: Interactive canvas and App-to-UI action bridge for mobile and web clients
+---
+
+SimpleClaw's Canvas feature provides an interactive web interface for building custom UIs and handling user actions from mobile apps.
+
+## Overview
+
+Canvas Host is a local HTTP server that serves interactive HTML/JS/CSS from `~/.openclaw/state/canvas/` and provides:
+
+- Live reload during development
+- WebSocket-based action bridge (A2UI)
+- Cross-platform compatibility (iOS, Android, Web)
+- Sandboxed file serving
+
+## Architecture
+
+The Canvas system has two main components:
+
+### 1. Canvas Host Server
+
+Serves user content from workspace directory (src/canvas-host/server.ts:399):
+
+```typescript
+const server = await startCanvasHost({
+  runtime,
+  rootDir: "~/.openclaw/state/canvas",
+  port: 0,  // Auto-assign
+  listenHost: "127.0.0.1",
+  liveReload: true
+});
+```
+
+**Endpoints:**
+- `/__simpleclaw__/canvas/` - User canvas root
+- `/__simpleclaw__/a2ui/` - Bundled A2UI demo app
+- `/__simpleclaw__/ws` - WebSocket for live reload
+
+### 2. A2UI (App-to-UI) Bridge
+
+Enables mobile apps to send actions to the agent (src/canvas-host/a2ui.ts):
+
+```javascript
+// iOS: window.webkit.messageHandlers.simpleClawCanvasA2UIAction.postMessage()
+// Android: window.simpleClawCanvasA2UIAction.postMessage()
+
+window.simpleClawSendUserAction({
+  name: "photo",
+  surfaceId: "main",
+  sourceComponentId: "demo.photo",
+  context: { timestamp: Date.now() }
+});
+```
+
+## Canvas Root Setup
+
+Default canvas location: `~/.openclaw/state/canvas/`
+
+On first run, SimpleClaw creates a default `index.html` (src/canvas-host/server.ts:58):
+
+```html
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SimpleClaw Canvas</title>
+
+<div class="wrap">
+  <div class="card">
+    <h1>SimpleClaw Canvas</h1>
+    
+    <button id="btn-hello">Hello</button>
+    <button id="btn-photo">Photo</button>
+    
+    <div id="status"></div>
+    <div id="log">Ready.</div>
+  </div>
+</div>
+
+<script>
+function send(name, sourceComponentId) {
+  const ok = window.simpleClawSendUserAction({
+    name,
+    surfaceId: "main",
+    sourceComponentId,
+    context: { t: Date.now() }
+  });
+  console.log(ok ? "Sent: " + name : "Failed: " + name);
+}
+
+document.getElementById("btn-hello").onclick = () => 
+  send("hello", "demo.hello");
+document.getElementById("btn-photo").onclick = () => 
+  send("photo", "demo.photo");
+</script>
+```
+
+## Live Reload
+
+Canvas watches for file changes and auto-reloads browsers (src/canvas-host/server.ts:261):
+
+```typescript
+const watcher = chokidar.watch(rootReal, {
+  ignoreInitial: true,
+  awaitWriteFinish: {
+    stabilityThreshold: 75,
+    pollInterval: 10
+  },
+  ignored: [
+    /(^|[\\/])\../, // dotfiles
+    /node_modules/
+  ]
+});
+
+watcher.on("all", () => broadcastReload());
+```
+
+WebSocket connection injects into HTML (src/canvas-host/a2ui.ts:81):
+
+```javascript
+const ws = new WebSocket(`ws://${location.host}/__simpleclaw__/ws`);
+ws.onmessage = (ev) => {
+  if (ev.data === "reload") location.reload();
+};
+```
+
+## Action Bridge API
+
+The A2UI bridge provides JavaScript helpers for mobile/web clients.
+
+### Sending Actions
+
+```javascript
+// Simple action
+window.simpleClawSendUserAction({
+  name: "search",
+  surfaceId: "main",
+  sourceComponentId: "search.button",
+  context: { query: "weather" }
+});
+```
+
+### Action Status Events
+
+```javascript
+window.addEventListener("simpleclaw:a2ui-action-status", (ev) => {
+  const { id, ok, error } = ev.detail;
+  console.log(`Action ${id}: ${ok ? "success" : error}`);
+});
+```
+
+### Platform Detection
+
+```javascript
+const hasIOS = () => 
+  !!(window.webkit?.messageHandlers?.simpleClawCanvasA2UIAction);
+
+const hasAndroid = () => 
+  !!(window.simpleClawCanvasA2UIAction?.postMessage);
+
+const hasHelper = () => 
+  typeof window.simpleClawSendUserAction === "function";
+```
+
+## File Resolution & Security
+
+Canvas uses sandboxed file serving (src/canvas-host/file-resolver.ts):
+
+```typescript
+export async function resolveFileWithinRoot(
+  rootReal: string,
+  urlPath: string
+): Promise<{ handle: FileHandle; realPath: string } | null> {
+  // Normalize path and prevent directory traversal
+  const normalized = normalizeUrlPath(urlPath);
+  const resolved = path.join(rootReal, normalized);
+  
+  // Verify file is within root
+  const real = await fs.realpath(resolved);
+  if (!real.startsWith(rootReal)) {
+    return null;  // Path escape attempt
+  }
+  
+  return { handle: await fs.open(real), realPath: real };
+}
+```
+
+**Security features:**
+- Path traversal prevention (`../` blocked)
+- Root boundary enforcement
+- No directory listings
+- Cache-Control: no-store on all responses
+
+## Configuration
+
+### Canvas Root Directory
+
+```yaml
+# Custom canvas location
+canvasHost:
+  rootDir: "~/my-canvas"
+  liveReload: true
+```
+
+### Disable Canvas
+
+```bash
+export SIMPLECLAW_SKIP_CANVAS_HOST=1
+```
+
+Or set `canvasHost.enabled: false` in config.
+
+## Development Workflow
+
+1. **Edit canvas files:**
+   ```bash
+   cd ~/.openclaw/state/canvas
+   vim index.html
+   ```
+
+2. **Open in browser:**
+   ```
+   http://localhost:<port>/__simpleclaw__/canvas/
+   ```
+
+3. **Save changes** - browser auto-reloads
+
+4. **Check logs:**
+   ```bash
+   tail -f ~/.openclaw/logs/gateway.log | grep canvas
+   ```
+
+## A2UI Demo App
+
+The bundled A2UI demo is served from `src/canvas-host/a2ui/` at:
+
+```
+http://localhost:<port>/__simpleclaw__/a2ui/
+```
+
+Includes interactive examples:
+- Hello action
+- Time query
+- Photo request
+- Custom Dalek action
+
+View source at `src/canvas-host/a2ui/index.html`
+
+## Mobile Integration
+
+### iOS (Swift)
+
+```swift
+import WebKit
+
+class CanvasViewController: UIViewController, WKScriptMessageHandler {
+  func userContentController(
+    _ userContentController: WKUserContentController,
+    didReceive message: WKScriptMessage
+  ) {
+    guard message.name == "simpleClawCanvasA2UIAction" else { return }
+    let action = parseUserAction(message.body)
+    sendToAgent(action)
+  }
+}
+```
+
+### Android (Kotlin)
+
+```kotlin
+class CanvasWebView(context: Context) : WebView(context) {
+  init {
+    addJavascriptInterface(
+      CanvasA2UIBridge(this),
+      "simpleClawCanvasA2UIAction"
+    )
+  }
+}
+
+class CanvasA2UIBridge(val webView: WebView) {
+  @JavascriptInterface
+  fun postMessage(payload: String) {
+    val action = parseUserAction(payload)
+    sendToAgent(action)
+  }
+}
+```
+
+## Advanced Features
+
+### Custom MIME Types
+
+Canvas auto-detects MIME types using `src/media/mime.ts`:
+
+```typescript
+const mime = 
+  lower.endsWith(".html") ? "text/html" :
+  await detectMime({ filePath: realPath });
+```
+
+### Live Reload Injection
+
+HTML responses get auto-injected bridge code (src/canvas-host/a2ui.ts:81):
+
+```javascript
+// Injected before </body>
+const ws = new WebSocket(...);
+globalThis.SimpleClaw = { postMessage, sendUserAction };
+globalThis.simpleClawSendUserAction = sendUserAction;
+```
+
+### Nested Skills Root Detection
+
+Canvas can detect nested `skills/` directories:
+
+```bash
+~/.openclaw/state/canvas/
+  skills/              # Detected as real root
+    github/SKILL.md
+    slack/SKILL.md
+```
+
+## Troubleshooting
+
+**Canvas not starting?**
+
+Check if disabled:
+```bash
+echo $SIMPLECLAW_SKIP_CANVAS_HOST
+```
+
+**Live reload not working?**
+
+Verify WebSocket connection in browser console:
+```javascript
+// Should see: WebSocket connected to ws://localhost:XXXX/__simpleclaw__/ws
+```
+
+**Actions not received?**
+
+Check mobile bridge is injected:
+```javascript
+console.log(typeof window.simpleClawSendUserAction);
+// Should be: "function"
+```
+
+**File not found?**
+
+Verify path is under canvas root:
+```bash
+ls ~/.openclaw/state/canvas/index.html
+```
+
+## API Reference
+
+Key functions from `src/canvas-host/`:
+
+- `startCanvasHost()` - Start canvas server (server.ts:399)
+- `createCanvasHostHandler()` - Create HTTP handler (server.ts:205)
+- `handleA2uiHttpRequest()` - Serve A2UI bundle (a2ui.ts:142)
+- `injectCanvasLiveReload()` - Inject WS client (a2ui.ts:81)
+- `resolveFileWithinRoot()` - Safe file resolution (file-resolver.ts)

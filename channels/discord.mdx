@@ -1,0 +1,427 @@
+---
+title: Discord
+description: Deploy SimpleClaw as a Discord bot with server and channel support
+icon: discord
+---
+
+SimpleClaw integrates with Discord through the official Discord Bot API, providing full bot functionality across servers, channels, threads, and direct messages.
+
+## Features
+
+- Direct messages and server channels
+- Thread support with auto-threading
+- Media attachments and embeds
+- Polls and reactions
+- Native slash commands
+- Interactive components (buttons, modals)
+- Message streaming with coalescing
+
+## Setup
+
+<Steps>
+  <Step title="Create Discord Application">
+    1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+    2. Click "New Application"
+    3. Give it a name and create
+    4. Navigate to the "Bot" section
+    5. Click "Add Bot" and confirm
+  </Step>
+  
+  <Step title="Configure Bot Permissions">
+    In the Bot section:
+    1. Enable "Message Content Intent" under Privileged Gateway Intents
+    2. Copy the bot token (click "Reset Token" if needed)
+    
+    <Warning>
+      The Message Content Intent is required for the bot to read message content in channels. Without it, the bot will only receive messages in DMs or when mentioned.
+    </Warning>
+  </Step>
+  
+  <Step title="Add Bot to SimpleClaw">
+    ```bash
+    simpleclaw setup discord --token "YOUR_BOT_TOKEN"
+    ```
+    
+    Or use environment variable:
+    ```bash
+    export DISCORD_BOT_TOKEN="your-token-here"
+    simpleclaw setup discord --use-env
+    ```
+  </Step>
+  
+  <Step title="Invite Bot to Server">
+    1. Go to OAuth2 → URL Generator in Developer Portal
+    2. Select scopes: `bot`, `applications.commands`
+    3. Select bot permissions: `Read Messages`, `Send Messages`, `Embed Links`, `Attach Files`, `Read Message History`, `Add Reactions`
+    4. Copy the generated URL and open in browser
+    5. Select server and authorize
+  </Step>
+  
+  <Step title="Verify Connection">
+    ```bash
+    simpleclaw channels status discord
+    ```
+    
+    You should see the bot username and connected status.
+  </Step>
+</Steps>
+
+## Configuration
+
+### Basic Configuration
+
+```yaml
+channels:
+  discord:
+    enabled: true
+    token: "your-bot-token-here"
+```
+
+### Environment Variable
+
+```bash
+export DISCORD_BOT_TOKEN="your-token-here"
+```
+
+```yaml
+channels:
+  discord:
+    enabled: true
+    # Token loaded from DISCORD_BOT_TOKEN env var
+```
+
+### Multi-Account Setup
+
+Run multiple Discord bots:
+
+```yaml
+channels:
+  discord:
+    enabled: true
+    accounts:
+      primary:
+        enabled: true
+        name: "Main Bot"
+        token: "token-1"
+      secondary:
+        enabled: true
+        name: "Test Bot"
+        token: "token-2"
+```
+
+## Security
+
+### DM Policy
+
+```yaml
+channels:
+  discord:
+    dm:
+      policy: pairing  # Options: open, pairing, allowlist, off
+      allowFrom:
+        - "123456789012345678"  # Discord user IDs
+```
+
+### Guild and Channel Configuration
+
+```yaml
+channels:
+  discord:
+    groupPolicy: allowlist  # Options: allowlist, open, off
+    guilds:
+      "987654321098765432":  # Guild (server) ID
+        name: "My Server"
+        channels:
+          "111111111111111111":  # Channel ID
+            requireMention: true
+            toolPolicy: default
+          "222222222222222222":
+            requireMention: false  # Always respond
+```
+
+### Open vs Allowlist Mode
+
+**Allowlist mode** (recommended):
+```yaml
+groupPolicy: allowlist
+guilds:
+  "guild-id":
+    channels:
+      "channel-id": {}  # Only allowed channels
+```
+
+**Open mode** (mention-gated):
+```yaml
+groupPolicy: open  # Any channel, but requires mention
+```
+
+## Advanced Features
+
+### Message Content Intent
+
+SimpleClaw checks the Message Content Intent status:
+
+- **enabled**: Bot can read all messages
+- **limited**: Works for bots under 100 servers (no verification needed)
+- **disabled**: Bot only receives DMs and mentions
+
+Status is shown in `simpleclaw channels status discord --probe`.
+
+### Reply Threading
+
+```yaml
+channels:
+  discord:
+    replyToMode: auto  # Options: off, auto, always
+```
+
+### Media Settings
+
+```yaml
+channels:
+  discord:
+    mediaMaxMb: 25  # Discord Nitro limit is 100MB, regular is 25MB
+```
+
+### Message History
+
+```yaml
+channels:
+  discord:
+    historyLimit: 50  # Number of messages to fetch for context
+```
+
+### Components and Modals
+
+Discord supports interactive components:
+
+```yaml
+channels:
+  discord:
+    # Components enabled by default
+    # Bot can send buttons, selects, and modals
+```
+
+## Message Features
+
+### Sending Messages
+
+```bash
+# Send to channel
+simpleclaw message send discord 123456789012345678 "Hello channel!"
+
+# Send DM
+simpleclaw message send discord user:123456789012345678 "Hello user!"
+
+# With media
+simpleclaw message send discord 123456789012345678 "Check this" --media-url "https://example.com/image.png"
+
+# Reply to message
+simpleclaw message send discord 123456789012345678 "Reply" --reply-to 987654321098765432
+
+# Silent notification
+simpleclaw message send discord 123456789012345678 "Quiet" --silent
+```
+
+### Target Formats
+
+- Channel: `123456789012345678`
+- User DM: `user:123456789012345678`
+- Thread: Thread ID (same as channel ID format)
+
+### Polls
+
+Create polls with up to 10 options:
+
+```yaml
+channels:
+  discord:
+    # Polls supported by default
+```
+
+### Reactions
+
+React to messages:
+
+```yaml
+channels:
+  discord:
+    # Reactions supported by default
+```
+
+### Streaming Responses
+
+Discord supports message streaming with coalescing:
+
+```yaml
+channels:
+  discord:
+    # Streaming enabled by default
+    # Default coalesce: minChars=1500, idleMs=1000
+```
+
+## Channel Management
+
+### Getting Channel IDs
+
+Enable Developer Mode in Discord:
+1. User Settings → Advanced → Developer Mode
+2. Right-click channel → Copy ID
+
+### Resolving Channels
+
+SimpleClaw can resolve channel names to IDs:
+
+```bash
+simpleclaw channels resolve discord "#general" --kind group
+```
+
+### Channel Audit
+
+Verify bot permissions in configured channels:
+
+```bash
+simpleclaw channels status discord --deep
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Bot Not Responding in Channels">
+    Check Message Content Intent:
+    
+    ```bash
+    simpleclaw channels status discord --probe
+    ```
+    
+    If disabled, enable it in Discord Developer Portal:
+    - Bot → Privileged Gateway Intents → Message Content Intent
+    
+    <Warning>
+      Bots in 100+ servers require verification to use Message Content Intent.
+    </Warning>
+  </Accordion>
+  
+  <Accordion title="Bot Offline or Not Connected">
+    Verify token is correct:
+    
+    ```bash
+    simpleclaw channels status discord --probe
+    ```
+    
+    Check for rate limiting or token issues in logs:
+    
+    ```bash
+    simpleclaw gateway logs
+    ```
+  </Accordion>
+  
+  <Accordion title="Messages in Specific Channel Ignored">
+    With `groupPolicy: allowlist`, the channel must be explicitly allowed:
+    
+    ```yaml
+    guilds:
+      "guild-id":
+        channels:
+          "channel-id": {}  # Add this
+    ```
+    
+    Or use `groupPolicy: open` with mention requirement.
+  </Accordion>
+  
+  <Accordion title="Mention Not Detected">
+    Ensure the bot user is mentioned with `@BotName`.
+    
+    SimpleClaw strips Discord mention patterns automatically.
+  </Accordion>
+</AccordionGroup>
+
+## CLI Commands
+
+```bash
+# Setup
+simpleclaw setup discord --token "YOUR_TOKEN"
+simpleclaw setup discord --use-env
+
+# Status
+simpleclaw channels status discord
+simpleclaw channels status discord --probe
+simpleclaw channels status discord --deep
+
+# Send message
+simpleclaw message send discord <channel-id> <message>
+simpleclaw message send discord user:<user-id> <message>
+
+# Resolve channels
+simpleclaw channels resolve discord "#channel-name" --kind group
+
+# Pairing
+simpleclaw pairing approve discord 123456789012345678
+```
+
+## API Reference
+
+Discord channel implementation: `extensions/discord/src/channel.ts`
+
+### Channel ID
+
+`discord`
+
+### Target ID Format
+
+- Channels: Numeric ID (e.g., `123456789012345678`)
+- User DMs: `user:123456789012345678`
+- Threads: Thread ID (numeric)
+
+### Capabilities
+
+- Chat types: `direct`, `channel`, `thread`
+- Features: `polls`, `reactions`, `threads`, `media`, `nativeCommands`
+- Delivery mode: `direct`
+- Text chunk limit: 2000 characters
+- Poll max options: 10
+- Streaming: Supported with coalescing (minChars: 1500, idleMs: 1000)
+
+### Configuration Schema
+
+See `DiscordConfigSchema` in source for full schema.
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Enable Content Intent" icon="eye">
+    Required for reading channel messages without mentions
+  </Card>
+  
+  <Card title="Use Allowlist Mode" icon="shield">
+    Restrict bot to specific channels:
+    ```yaml
+    groupPolicy: allowlist
+    ```
+  </Card>
+  
+  <Card title="Require Mentions" icon="at">
+    Prevent bot from responding to all messages:
+    ```yaml
+    requireMention: true
+    ```
+  </Card>
+  
+  <Card title="Set Media Limits" icon="file-image">
+    Prevent large file uploads:
+    ```yaml
+    mediaMaxMb: 25
+    ```
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Configuration" icon="shield" href="/security">
+    Configure DM policies and allowlists
+  </Card>
+  <Card title="Slash Commands" icon="slash" href="/features/commands">
+    Set up Discord slash commands
+  </Card>
+</CardGroup>

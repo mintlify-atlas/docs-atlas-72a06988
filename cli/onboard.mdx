@@ -1,0 +1,249 @@
+---
+title: "Onboard CLI"
+description: "Interactive wizard to set up the gateway, workspace, and skills"
+---
+
+The `onboard` command is an interactive wizard that guides you through setting up SimpleClaw, including gateway configuration, workspace setup, and skills installation.
+
+## Command
+
+```bash
+simpleclaw onboard
+```
+
+## Options
+
+<ParamField path="--workspace" type="string">
+  Agent workspace directory (default: `~/.simpleclaw/workspace`)
+</ParamField>
+
+<ParamField path="--reset" type="boolean">
+  Reset config, credentials, sessions, and workspace before running wizard
+</ParamField>
+
+<ParamField path="--non-interactive" type="boolean">
+  Run without prompts
+</ParamField>
+
+<ParamField path="--accept-risk" type="boolean">
+  Acknowledge that agents are powerful and full system access is risky (required for `--non-interactive`)
+</ParamField>
+
+### Wizard Flow
+
+<ParamField path="--flow" type="string">
+  Wizard flow: `quickstart`, `advanced`, or `manual`
+</ParamField>
+
+<ParamField path="--mode" type="string">
+  Wizard mode: `local` or `remote`
+</ParamField>
+
+### Authentication
+
+<ParamField path="--auth-choice" type="string">
+  Authentication choice (provider-specific)
+</ParamField>
+
+<ParamField path="--token-provider" type="string">
+  Token provider id (non-interactive; used with `--auth-choice token`)
+</ParamField>
+
+<ParamField path="--token" type="string">
+  Token value (non-interactive; used with `--auth-choice token`)
+</ParamField>
+
+<ParamField path="--token-profile-id" type="string">
+  Auth profile id (non-interactive; default: `<provider>:manual`)
+</ParamField>
+
+<ParamField path="--token-expires-in" type="string">
+  Optional token expiry duration (e.g., `365d`, `12h`)
+</ParamField>
+
+### Provider API Keys
+
+<ParamField path="--anthropic-api-key" type="string">
+  Anthropic API key
+</ParamField>
+
+<ParamField path="--openai-api-key" type="string">
+  OpenAI API key
+</ParamField>
+
+<ParamField path="--mistral-api-key" type="string">
+  Mistral API key
+</ParamField>
+
+<ParamField path="--openrouter-api-key" type="string">
+  OpenRouter API key
+</ParamField>
+
+<ParamField path="--kilocode-api-key" type="string">
+  Kilocode API key
+</ParamField>
+
+<ParamField path="--gemini-api-key" type="string">
+  Google Gemini API key
+</ParamField>
+
+<ParamField path="--xai-api-key" type="string">
+  xAI API key
+</ParamField>
+
+<ParamField path="--together-api-key" type="string">
+  Together AI API key
+</ParamField>
+
+<ParamField path="--huggingface-api-key" type="string">
+  Hugging Face API key
+</ParamField>
+
+Additional provider flags are available for other supported providers.
+
+### Custom Provider
+
+<ParamField path="--custom-base-url" type="string">
+  Custom provider base URL
+</ParamField>
+
+<ParamField path="--custom-api-key" type="string">
+  Custom provider API key (optional)
+</ParamField>
+
+<ParamField path="--custom-model-id" type="string">
+  Custom provider model ID
+</ParamField>
+
+<ParamField path="--custom-provider-id" type="string">
+  Custom provider ID (optional; auto-derived by default)
+</ParamField>
+
+<ParamField path="--custom-compatibility" type="string">
+  Custom provider API compatibility: `openai` or `anthropic` (default: `openai`)
+</ParamField>
+
+### Gateway Configuration
+
+<ParamField path="--gateway-port" type="number">
+  Gateway port
+</ParamField>
+
+<ParamField path="--gateway-bind" type="string">
+  Gateway bind mode: `loopback`, `tailnet`, `lan`, `auto`, or `custom`
+</ParamField>
+
+<ParamField path="--gateway-auth" type="string">
+  Gateway auth mode: `token` or `password`
+</ParamField>
+
+<ParamField path="--gateway-token" type="string">
+  Gateway token (token auth)
+</ParamField>
+
+<ParamField path="--gateway-password" type="string">
+  Gateway password (password auth)
+</ParamField>
+
+### Remote Gateway
+
+<ParamField path="--remote-url" type="string">
+  Remote Gateway WebSocket URL
+</ParamField>
+
+<ParamField path="--remote-token" type="string">
+  Remote Gateway token (optional)
+</ParamField>
+
+### Tailscale
+
+<ParamField path="--tailscale" type="string">
+  Tailscale mode: `off`, `serve`, or `funnel`
+</ParamField>
+
+<ParamField path="--tailscale-reset-on-exit" type="boolean">
+  Reset tailscale serve/funnel on exit
+</ParamField>
+
+### Daemon/Service
+
+<ParamField path="--install-daemon" type="boolean">
+  Install gateway service
+</ParamField>
+
+<ParamField path="--no-install-daemon" type="boolean">
+  Skip gateway service install
+</ParamField>
+
+<ParamField path="--skip-daemon" type="boolean">
+  Skip gateway service install
+</ParamField>
+
+<ParamField path="--daemon-runtime" type="string">
+  Daemon runtime: `node` or `bun`
+</ParamField>
+
+### Skip Options
+
+<ParamField path="--skip-channels" type="boolean">
+  Skip channel setup
+</ParamField>
+
+<ParamField path="--skip-skills" type="boolean">
+  Skip skills setup
+</ParamField>
+
+<ParamField path="--skip-health" type="boolean">
+  Skip health check
+</ParamField>
+
+<ParamField path="--skip-ui" type="boolean">
+  Skip Control UI/TUI prompts
+</ParamField>
+
+### Other Options
+
+<ParamField path="--node-manager" type="string">
+  Node manager for skills: `npm`, `pnpm`, or `bun`
+</ParamField>
+
+<ParamField path="--json" type="boolean">
+  Output JSON summary
+</ParamField>
+
+## Examples
+
+```bash
+# Run interactive onboarding wizard
+simpleclaw onboard
+
+# Quick non-interactive setup with Anthropic
+simpleclaw onboard --non-interactive --accept-risk --anthropic-api-key <key> --flow quickstart
+
+# Custom workspace location
+simpleclaw onboard --workspace ~/my-agent-workspace
+
+# Reset and re-run onboarding
+simpleclaw onboard --reset
+
+# Remote gateway mode
+simpleclaw onboard --mode remote --remote-url ws://gateway-host:8080
+
+# Skip channels and skills
+simpleclaw onboard --skip-channels --skip-skills
+```
+
+## Non-Interactive Setup
+
+For automated or scripted setups, use `--non-interactive` with `--accept-risk` and required flags:
+
+```bash
+simpleclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --flow quickstart \
+  --anthropic-api-key <key> \
+  --gateway-port 8080 \
+  --gateway-auth token \
+  --install-daemon
+```

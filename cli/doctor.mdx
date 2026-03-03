@@ -1,0 +1,164 @@
+---
+title: "Doctor CLI"
+description: "Health checks and quick fixes for the gateway and channels"
+---
+
+The `doctor` command performs health checks and applies quick fixes for common issues with the gateway, channels, configuration, and workspace.
+
+## Command
+
+```bash
+simpleclaw doctor
+```
+
+## Options
+
+<ParamField path="--no-workspace-suggestions" type="boolean">
+  Disable workspace memory system suggestions
+</ParamField>
+
+<ParamField path="--yes" type="boolean">
+  Accept defaults without prompting
+</ParamField>
+
+<ParamField path="--repair" type="boolean">
+  Apply recommended repairs without prompting
+</ParamField>
+
+<ParamField path="--fix" type="boolean">
+  Apply recommended repairs (alias for `--repair`)
+</ParamField>
+
+<ParamField path="--force" type="boolean">
+  Apply aggressive repairs (overwrites custom service config)
+</ParamField>
+
+<ParamField path="--non-interactive" type="boolean">
+  Run without prompts (safe migrations only)
+</ParamField>
+
+<ParamField path="--generate-gateway-token" type="boolean">
+  Generate and configure a gateway token
+</ParamField>
+
+<ParamField path="--deep" type="boolean">
+  Scan system services for extra gateway installs
+</ParamField>
+
+## What Doctor Checks
+
+The `doctor` command performs the following checks and repairs:
+
+### Configuration
+
+- **Config validation**: Validates YAML/JSON5 config file structure
+- **Config migration**: Detects and migrates legacy config formats
+- **Gateway mode**: Ensures `gateway.mode` is set (`local` or `remote`)
+- **Gateway auth**: Checks for token/password authentication setup
+- **Config integrity**: Validates required sections and values
+
+### Authentication
+
+- **Auth profiles**: Checks auth profile health and keychain access
+- **Deprecated profiles**: Removes deprecated CLI auth profiles
+- **Provider credentials**: Validates API keys and tokens
+- **OAuth repairs**: Fixes Anthropic OAuth profile ID issues
+
+### Gateway
+
+- **Gateway health**: Probes gateway connectivity and health endpoints
+- **Service config**: Validates and repairs gateway service configuration
+- **Daemon install**: Detects missing or misconfigured daemon installs
+- **Extra services**: Scans for duplicate gateway services (with `--deep`)
+- **LaunchAgent overrides**: Detects macOS LaunchAgent environment overrides
+
+### State and Sessions
+
+- **Legacy state**: Detects and migrates legacy session/agent/WhatsApp state
+- **Session locks**: Checks for stale session locks
+- **State integrity**: Validates workspace and session state
+- **Backup tips**: Suggests workspace backup if needed
+
+### Workspace and Skills
+
+- **Workspace status**: Checks workspace directory and file structure
+- **Memory system**: Suggests memory system setup if applicable
+- **Sandbox images**: Validates and repairs sandbox container images
+- **Sandbox scope**: Warns about sandbox scope issues
+
+### Security
+
+- **Security warnings**: Checks for common security misconfigurations
+- **Deprecated env vars**: Detects deprecated environment variables
+- **Platform notes**: Platform-specific security and configuration notes
+
+### Channels
+
+- **Memory search**: Checks memory search health (if enabled)
+- **Shell completion**: Validates shell completion setup
+
+### Updates
+
+- **Version check**: Optionally checks for SimpleClaw updates
+- **UI protocol**: Ensures UI protocol freshness
+
+## Examples
+
+```bash
+# Run interactive health checks
+simpleclaw doctor
+
+# Auto-apply recommended repairs
+simpleclaw doctor --repair
+
+# Non-interactive mode with safe migrations only
+simpleclaw doctor --non-interactive
+
+# Generate and configure a gateway token
+simpleclaw doctor --generate-gateway-token
+
+# Deep scan for duplicate gateway services
+simpleclaw doctor --deep
+
+# Accept all defaults without prompting
+simpleclaw doctor --yes
+
+# Force aggressive repairs (use with caution)
+simpleclaw doctor --force
+```
+
+## When to Run Doctor
+
+Run `simpleclaw doctor` when:
+
+- You encounter errors starting the gateway
+- Channels fail to connect or authenticate
+- Configuration changes don't take effect
+- After major SimpleClaw updates
+- When migrating from legacy versions
+- If you suspect configuration corruption
+- Before reporting issues or seeking support
+
+## Output
+
+Doctor provides color-coded output:
+
+- **Green/Success**: Checks passed or repairs applied successfully
+- **Yellow/Warning**: Non-critical issues detected
+- **Red/Error**: Critical issues that require attention
+
+Each section displays:
+
+- The check or repair being performed
+- Results and any detected issues
+- Recommended actions or fixes
+- Confirmation prompts (in interactive mode)
+
+## Safety
+
+- **Safe mode** (`--non-interactive`): Only applies migrations that are guaranteed safe
+- **Interactive mode** (default): Prompts before applying any changes
+- **Repair mode** (`--repair` or `--fix`): Applies recommended repairs without prompting
+- **Force mode** (`--force`): Applies aggressive repairs; use with caution as this may overwrite custom configurations
+
+Always review the changes before running with `--repair` or `--force`.

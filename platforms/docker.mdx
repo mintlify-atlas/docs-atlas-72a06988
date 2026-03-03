@@ -1,0 +1,614 @@
+---
+title: "Docker"
+description: "SimpleClaw Docker deployment - containerized gateway setup and configuration"
+---
+
+SimpleClaw can be deployed in Docker containers for isolated, reproducible environments.
+
+## Overview
+
+Docker deployment provides:
+
+- **Isolated environment** - no local Node.js installation required
+- **Reproducible builds** - consistent behavior across systems
+- **Easy updates** - pull new images to upgrade
+- **Resource limits** - control memory and CPU usage
+- **Multi-container setup** - gateway + CLI in separate containers
+
+## Quick Start
+
+### Using Docker Compose
+
+1. Create `docker-compose.yml`:
+
+```yaml
+services:
+  simpleclaw-gateway:
+    image: simpleclaw:latest
+    environment:
+      HOME: /home/node
+      SIMPLECLAW_GATEWAY_TOKEN: ${SIMPLECLAW_GATEWAY_TOKEN}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      - ./config:/home/node/.simpleclaw
+      - ./workspace:/home/node/.simpleclaw/workspace
+    ports:
+      - "18789:18789"
+    restart: unless-stopped
+    command:
+      - node
+      - dist/index.js
+      - gateway
+      - --bind
+      - lan
+      - --port
+      - "18789"
+```
+
+2. Create `.env` file:
+
+```bash
+SIMPLECLAW_GATEWAY_TOKEN=your-secure-token
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:ABC...
+DISCORD_BOT_TOKEN=MTk...
+```
+
+3. Start the gateway:
+
+```bash
+docker compose up -d
+```
+
+4. Check status:
+
+```bash
+docker compose logs -f
+```
+
+## Building the Image
+
+### From Repository
+
+Clone and build:
+
+```bash
+git clone https://github.com/simpleclaw/simpleclaw.git
+cd simpleclaw
+
+# Build standard image
+docker build -t simpleclaw:local .
+
+# Build with browser support (adds ~300MB)
+docker build \
+  --build-arg SIMPLECLAW_INSTALL_BROWSER=1 \
+  -t simpleclaw:browser \
+  .
+
+# Build with custom apt packages
+docker build \
+  --build-arg SIMPLECLAW_DOCKER_APT_PACKAGES="vim curl" \
+  -t simpleclaw:custom \
+  .
+```
+
+### Dockerfile Overview
+
+The Dockerfile:
+
+- Base: `node:22-bookworm` (Debian 12)
+- User: `node` (uid 1000, non-root)
+- Installs: Bun, pnpm, project dependencies
+- Builds: TypeScript to `dist/`, UI to `ui/dist/`
+- Optional: Chromium + Xvfb (if `SIMPLECLAW_INSTALL_BROWSER=1`)
+- Exposes: Port 18789 (gateway)
+- Command: `node simpleclaw.mjs gateway --allow-unconfigured`
+
+### Build Arguments
+
+| Argument | Purpose | Example |
+|----------|---------|----------|
+| `SIMPLECLAW_INSTALL_BROWSER` | Install Chromium + Xvfb | `--build-arg SIMPLECLAW_INSTALL_BROWSER=1` |
+| `SIMPLECLAW_DOCKER_APT_PACKAGES` | Additional apt packages | `--build-arg SIMPLECLAW_DOCKER_APT_PACKAGES="vim curl"` |
+
+## Running Containers
+
+### Gateway Container
+
+Run the gateway:
+
+```bash
+docker run -d \
+  --name simpleclaw-gateway \
+  -p 18789:18789 \
+  -v $(pwd)/config:/home/node/.simpleclaw \
+  -v $(pwd)/workspace:/home/node/.simpleclaw/workspace \
+  -e SIMPLECLAW_GATEWAY_TOKEN=your-token \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  simpleclaw:latest
+```
+
+### CLI Container
+
+Run CLI commands:
+
+```bash
+docker run --rm \
+  -v $(pwd)/config:/home/node/.simpleclaw \
+  -e SIMPLECLAW_GATEWAY_TOKEN=your-token \
+  simpleclaw:latest \
+  node dist/index.js channels status
+```
+
+### Interactive Shell
+
+Drop into a shell:
+
+```bash
+docker run --rm -it \
+  -v $(pwd)/config:/home/node/.simpleclaw \
+  simpleclaw:latest \
+  /bin/bash
+```
+
+## Configuration
+
+### Volume Mounts
+
+Mount these directories:
+
+```bash
+-v /host/config:/home/node/.simpleclaw         # Config and credentials
+-v /host/workspace:/home/node/.simpleclaw/workspace  # Agent workspace
+```
+
+### Environment Variables
+
+Pass via `-e` or `.env` file:
+
+```bash
+HOME=/home/node                    # User home directory
+NODE_ENV=production                # Production mode
+SIMPLECLAW_GATEWAY_TOKEN=...       # Gateway auth token
+SIMPLECLAW_GATEWAY_BIND=lan        # Bind address (lan/loopback)
+SIMPLECLAW_GATEWAY_PORT=18789      # Gateway port
+ANTHROPIC_API_KEY=...              # Anthropic API key
+TELEGRAM_BOT_TOKEN=...             # Telegram bot token
+DISCORD_BOT_TOKEN=...              # Discord bot token
+CLAUDE_AI_SESSION_KEY=...          # Claude.ai session
+CLAUDE_WEB_SESSION_KEY=...         # Claude web session
+CLAUDE_WEB_COOKIE=...              # Claude web cookie
+```
+
+### Network Mode
+
+Bind to specific interfaces:
+
+```bash
+# Loopback only (localhost)
+docker run ... \
+  simpleclaw:latest \
+  node dist/index.js gateway --bind loopback
+
+# LAN (all interfaces)
+docker run ... \
+  simpleclaw:latest \
+  node dist/index.js gateway --bind lan
+```
+
+## Docker Compose Configuration
+
+### Full Example
+
+```yaml
+services:
+  simpleclaw-gateway:
+    image: ${SIMPLECLAW_IMAGE:-simpleclaw:latest}
+    container_name: simpleclaw-gateway
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      NODE_ENV: production
+      SIMPLECLAW_GATEWAY_TOKEN: ${SIMPLECLAW_GATEWAY_TOKEN}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
+    volumes:
+      - ${SIMPLECLAW_CONFIG_DIR:-./config}:/home/node/.simpleclaw
+      - ${SIMPLECLAW_WORKSPACE_DIR:-./workspace}:/home/node/.simpleclaw/workspace
+    ports:
+      - "${SIMPLECLAW_GATEWAY_PORT:-18789}:18789"
+      - "${SIMPLECLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      - node
+      - dist/index.js
+      - gateway
+      - --bind
+      - "${SIMPLECLAW_GATEWAY_BIND:-lan}"
+      - --port
+      - "18789"
+      - --verbose
+
+  simpleclaw-cli:
+    image: ${SIMPLECLAW_IMAGE:-simpleclaw:latest}
+    container_name: simpleclaw-cli
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      SIMPLECLAW_GATEWAY_TOKEN: ${SIMPLECLAW_GATEWAY_TOKEN}
+      BROWSER: echo
+    volumes:
+      - ${SIMPLECLAW_CONFIG_DIR:-./config}:/home/node/.simpleclaw
+      - ${SIMPLECLAW_WORKSPACE_DIR:-./workspace}:/home/node/.simpleclaw/workspace
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+```
+
+### Environment File
+
+Create `.env`:
+
+```bash
+SIMPLECLAW_IMAGE=simpleclaw:latest
+SIMPLECLAW_CONFIG_DIR=./config
+SIMPLECLAW_WORKSPACE_DIR=./workspace
+SIMPLECLAW_GATEWAY_PORT=18789
+SIMPLECLAW_BRIDGE_PORT=18790
+SIMPLECLAW_GATEWAY_BIND=lan
+SIMPLECLAW_GATEWAY_TOKEN=your-secure-token
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:ABC...
+DISCORD_BOT_TOKEN=MTk...
+```
+
+### Run CLI Commands
+
+```bash
+# Check status
+docker compose run --rm simpleclaw-cli channels status
+
+# Send message
+docker compose run --rm simpleclaw-cli message send \
+  --to +1234567890 \
+  --message "Hello from Docker"
+
+# Talk to agent
+docker compose run --rm simpleclaw-cli agent \
+  --message "What's the weather?" \
+  --thinking high
+```
+
+## Browser Automation
+
+### With Chromium Pre-installed
+
+Build with browser:
+
+```bash
+docker build \
+  --build-arg SIMPLECLAW_INSTALL_BROWSER=1 \
+  -t simpleclaw:browser \
+  .
+```
+
+This:
+- Installs Chromium via Playwright
+- Installs Xvfb for virtual display
+- Adds ~300MB to image size
+- Eliminates 60-90s install on every container start
+
+### Without Pre-installed Browser
+
+Browsers install on first use:
+
+```bash
+# Gateway will auto-install on first browser tool use
+docker run ... simpleclaw:latest
+```
+
+Downside: 60-90s delay on first run.
+
+## Health Checks
+
+### Gateway Health
+
+Add health check to Compose:
+
+```yaml
+services:
+  simpleclaw-gateway:
+    # ...
+    healthcheck:
+      test: ["CMD", "node", "dist/index.js", "gateway", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+### External Health Checks
+
+For platforms requiring external health checks:
+
+1. Set gateway token:
+   ```bash
+   -e SIMPLECLAW_GATEWAY_TOKEN=your-token
+   ```
+
+2. Bind to LAN:
+   ```bash
+   command:
+     - node
+     - dist/index.js
+     - gateway
+     - --bind
+     - lan
+     - --allow-unconfigured
+   ```
+
+3. Query health endpoint:
+   ```bash
+   curl -H "Authorization: Bearer your-token" \
+     http://localhost:18789/health
+   ```
+
+## Resource Limits
+
+### Memory Limits
+
+```yaml
+services:
+  simpleclaw-gateway:
+    # ...
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+```
+
+### CPU Limits
+
+```yaml
+services:
+  simpleclaw-gateway:
+    # ...
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+        reservations:
+          cpus: '0.5'
+```
+
+### Node.js Heap Size
+
+```yaml
+services:
+  simpleclaw-gateway:
+    # ...
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=2048"
+```
+
+## Security
+
+### Non-Root User
+
+The image runs as `node` user (uid 1000):
+
+- Prevents privilege escalation
+- Reduces attack surface
+- Matches standard Node.js Docker practices
+
+### Network Isolation
+
+Bind to loopback for internal-only access:
+
+```bash
+command:
+  - node
+  - dist/index.js
+  - gateway
+  - --bind
+  - loopback
+```
+
+Use reverse proxy (nginx, Caddy) for external access.
+
+### Secrets Management
+
+Use Docker secrets or external secret managers:
+
+```yaml
+secrets:
+  gateway_token:
+    external: true
+  anthropic_key:
+    external: true
+
+services:
+  simpleclaw-gateway:
+    secrets:
+      - gateway_token
+      - anthropic_key
+    environment:
+      SIMPLECLAW_GATEWAY_TOKEN_FILE: /run/secrets/gateway_token
+      ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_key
+```
+
+## Persistence
+
+### Data Directories
+
+Mount volumes for persistence:
+
+```
+~/.simpleclaw/
+├── config.yaml              # Main config (mount)
+├── credentials/             # API keys (mount)
+├── agents/main/sessions/    # Session logs (mount)
+├── agents/main/workspace/   # Agent files (mount)
+├── channels/                # Channel state (mount)
+└── logs/                    # Gateway logs (optional)
+```
+
+### Backup
+
+Back up mounted directories:
+
+```bash
+# Backup config
+tar -czf simpleclaw-backup-$(date +%Y%m%d).tar.gz \
+  config/ workspace/
+
+# Restore
+tar -xzf simpleclaw-backup-20260303.tar.gz
+```
+
+## Updating
+
+### Pull New Image
+
+```bash
+# Pull latest
+docker pull simpleclaw:latest
+
+# Restart containers
+docker compose down
+docker compose up -d
+```
+
+### Rebuild Custom Image
+
+```bash
+# Pull latest source
+cd simpleclaw
+git pull
+
+# Rebuild image
+docker build -t simpleclaw:latest .
+
+# Restart
+docker compose down
+docker compose up -d
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+Check logs:
+
+```bash
+docker compose logs simpleclaw-gateway
+```
+
+Common issues:
+- Port 18789 already in use
+- Missing environment variables
+- Volume mount permissions
+- Invalid config syntax
+
+### Permission Errors
+
+Fix volume permissions:
+
+```bash
+# Set ownership to uid 1000 (node user)
+sudo chown -R 1000:1000 config/ workspace/
+
+# Or match your user
+sudo chown -R $UID:$UID config/ workspace/
+```
+
+### Gateway Not Reachable
+
+Check bind address:
+
+```bash
+# Inside container
+docker exec simpleclaw-gateway ss -ltnp | grep 18789
+
+# Should show 0.0.0.0:18789 for LAN
+# Or 127.0.0.1:18789 for loopback
+```
+
+### Browser Tools Fail
+
+Install browser dependencies:
+
+```bash
+# Rebuild with browser support
+docker build \
+  --build-arg SIMPLECLAW_INSTALL_BROWSER=1 \
+  -t simpleclaw:browser \
+  .
+```
+
+## Production Deployment
+
+### systemd Service
+
+Manage Docker Compose via systemd:
+
+```ini
+# /etc/systemd/system/simpleclaw.service
+[Unit]
+Description=SimpleClaw Docker Gateway
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/simpleclaw
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable:
+
+```bash
+sudo systemctl enable simpleclaw
+sudo systemctl start simpleclaw
+```
+
+### Reverse Proxy
+
+Use nginx or Caddy for TLS:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name gateway.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:18789;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+## Related Documentation
+
+- [Linux Installation](/platforms/linux)
+- [Gateway Configuration](/configuration)
+- [CLI Reference](/cli/gateway)
+- [Channel Setup](/channels/overview)

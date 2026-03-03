@@ -1,0 +1,410 @@
+---
+title: "Voice Setup"
+description: "Enable voice interaction with SimpleClaw using Talk Mode and Voice Wake"
+---
+
+# Voice Setup
+
+SimpleClaw supports voice interaction through Talk Mode (voice output) and Voice Wake (voice input) on macOS, iOS, and Android.
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Platform" icon="computer">
+    macOS, iOS, or Android device
+  </Card>
+  <Card title="Voice Provider" icon="microphone">
+    ElevenLabs, OpenAI, or compatible TTS service
+  </Card>
+</CardGroup>
+
+## Quick Setup
+
+<Steps>
+  <Step title="Configure Voice Provider">
+    Set up ElevenLabs (recommended):
+
+    ```bash
+    simpleclaw config set talk.provider '"elevenlabs"' --json
+    simpleclaw config set talk.providers.elevenlabs.apiKey '"YOUR_API_KEY"' --json
+    ```
+
+    Get your API key from [ElevenLabs](https://elevenlabs.io/).
+  </Step>
+
+  <Step title="Choose a Voice">
+    List available voices:
+    ```bash
+    simpleclaw talk voices
+    ```
+
+    Set your preferred voice:
+    ```bash
+    simpleclaw config set talk.voiceId '"21m00Tcm4TlvDq8ikWAM"' --json
+    ```
+  </Step>
+
+  <Step title="Test Talk Mode">
+    ```bash
+    simpleclaw agent --message "Hello!" --talk
+    ```
+
+    The response will be spoken aloud.
+  </Step>
+</Steps>
+
+## Talk Mode Configuration
+
+Talk Mode provides voice output for agent responses.
+
+### Basic Configuration
+
+```json
+{
+  "talk": {
+    "provider": "elevenlabs",
+    "voiceId": "21m00Tcm4TlvDq8ikWAM",
+    "modelId": "eleven_turbo_v2",
+    "interruptOnSpeech": true
+  }
+}
+```
+
+### Provider Options
+
+<Tabs>
+  <Tab title="ElevenLabs">
+    ```json
+    {
+      "talk": {
+        "provider": "elevenlabs",
+        "providers": {
+          "elevenlabs": {
+            "apiKey": "YOUR_API_KEY",
+            "voiceId": "21m00Tcm4TlvDq8ikWAM",
+            "modelId": "eleven_turbo_v2",
+            "outputFormat": "mp3_44100_128"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    ```json
+    {
+      "talk": {
+        "provider": "openai",
+        "providers": {
+          "openai": {
+            "apiKey": "YOUR_API_KEY",
+            "voiceId": "alloy",
+            "modelId": "tts-1-hd"
+          }
+        }
+      }
+    }
+    ```
+    
+    OpenAI voices: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
+  </Tab>
+</Tabs>
+
+### Voice Aliases
+
+Create named aliases for different voices:
+
+```json
+{
+  "talk": {
+    "voiceAliases": {
+      "assistant": "21m00Tcm4TlvDq8ikWAM",
+      "narrator": "pNInz6obpgDQGcFmaJgB",
+      "friendly": "EXAVITQu4vr4xnSDxMaL"
+    }
+  }
+}
+```
+
+Use aliases in commands:
+```bash
+simpleclaw agent --message "Tell me a story" --talk --voice narrator
+```
+
+## Voice Wake Setup
+
+Voice Wake enables hands-free voice input using a wake word.
+
+### macOS Setup
+
+<Steps>
+  <Step title="Enable Voice Wake in macOS App">
+    1. Open OpenClaw menu bar app
+    2. Go to **Preferences** → **Voice Wake**
+    3. Enable **Voice Wake**
+    4. Choose wake word (default: "Hey Claw")
+  </Step>
+
+  <Step title="Grant Microphone Permission">
+    macOS will prompt for microphone access. Click **Allow**.
+  </Step>
+
+  <Step title="Test Voice Wake">
+    Say your wake word:
+    ```
+    "Hey Claw, what's the weather today?"
+    ```
+  </Step>
+
+  <Step title="Configure Voice Wake Behavior">
+    ```json
+    {
+      "voiceWake": {
+        "enabled": true,
+        "wakeWord": "Hey Claw",
+        "autoTalk": true,
+        "thinkingLevel": "low",
+        "deliverToChannel": false
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+### iOS Setup
+
+<Steps>
+  <Step title="Install iOS App">
+    Build and install the iOS app (see platform docs).
+  </Step>
+
+  <Step title="Pair as Node">
+    1. Open the iOS app
+    2. Tap **Pair Device**
+    3. Scan the QR code from:
+       ```bash
+       simpleclaw nodes pair --platform ios
+       ```
+  </Step>
+
+  <Step title="Enable Voice Wake">
+    In the iOS app:
+    1. Go to **Settings**
+    2. Enable **Voice Wake**
+    3. Grant microphone permission
+  </Step>
+
+  <Step title="Test">
+    Say: "Hey Claw, what can you do?"
+  </Step>
+</Steps>
+
+### Android Setup
+
+Same process as iOS - build app, pair as node, enable Voice Wake.
+
+## Push-to-Talk Mode
+
+Alternative to voice activation - hold a key to speak:
+
+### macOS PTT
+
+1. Open OpenClaw menu bar app
+2. Go to **Preferences** → **Voice Wake**
+3. Enable **Push to Talk**
+4. Set hotkey (default: `Option+Space`)
+5. Hold hotkey and speak
+
+## Voice Wake Configuration Reference
+
+```json
+{
+  "voiceWake": {
+    "enabled": true,
+    "wakeWord": "Hey Claw",
+    "autoTalk": true,
+    "thinkingLevel": "low",
+    "deliverToChannel": false,
+    "sessionKey": "voice",
+    "agentId": "main",
+    "timeout": 30000
+  }
+}
+```
+
+<ParamField path="enabled" type="boolean" default="false">
+  Enable Voice Wake
+</ParamField>
+
+<ParamField path="wakeWord" type="string" default="Hey Claw">
+  Wake word phrase
+</ParamField>
+
+<ParamField path="autoTalk" type="boolean" default="true">
+  Automatically speak responses
+</ParamField>
+
+<ParamField path="thinkingLevel" type="string" default="low">
+  Thinking level for voice requests
+</ParamField>
+
+<ParamField path="deliverToChannel" type="boolean" default="false">
+  Also deliver response to last used channel
+</ParamField>
+
+<ParamField path="timeout" type="number" default="30000">
+  Voice input timeout (ms)
+</ParamField>
+
+## Talk Mode API
+
+### Enable Talk Mode
+
+Via WebSocket:
+```json
+{
+  "type": "req",
+  "id": "req-1",
+  "method": "talk.mode",
+  "params": {
+    "enabled": true,
+    "phase": "full"
+  }
+}
+```
+
+Phases:
+- `full` - Speak full responses
+- `summary` - Speak summaries only
+- `off` - Disable voice output
+
+### Get Talk Configuration
+
+```json
+{
+  "type": "req",
+  "id": "req-2",
+  "method": "talk.config",
+  "params": {}
+}
+```
+
+Response includes current provider, voices, and settings.
+
+## Advanced Features
+
+### Interrupt on Speech
+
+Stop agent speech when you start talking:
+
+```json
+{
+  "talk": {
+    "interruptOnSpeech": true
+  }
+}
+```
+
+### Per-Session Voice Settings
+
+Different voices for different agents:
+
+```json
+{
+  "agents": {
+    "main": {
+      "talk": {
+        "voiceId": "assistant"
+      }
+    },
+    "storyteller": {
+      "talk": {
+        "voiceId": "narrator"
+      }
+    }
+  }
+}
+```
+
+### Voice in Channels
+
+Enable voice responses in messaging channels:
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "talk": {
+        "enabled": true,
+        "voiceId": "assistant"
+      }
+    }
+  }
+}
+```
+
+Responses will include voice message attachments.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No audio output">
+    1. Check system volume
+    2. Verify TTS provider is configured:
+       ```bash
+       simpleclaw config get talk
+       ```
+    3. Test provider API key:
+       ```bash
+       simpleclaw talk test
+       ```
+  </Accordion>
+
+  <Accordion title="Voice Wake not triggering">
+    1. Check microphone permission in System Settings
+    2. Verify Voice Wake is enabled:
+       ```bash
+       simpleclaw config get voiceWake.enabled
+       ```
+    3. Check Gateway logs:
+       ```bash
+       simpleclaw gateway logs --tail 50
+       ```
+  </Accordion>
+
+  <Accordion title="Poor transcription quality">
+    1. Reduce background noise
+    2. Speak closer to microphone
+    3. Adjust voice timeout:
+       ```bash
+       simpleclaw config set voiceWake.timeout 45000 --json
+       ```
+  </Accordion>
+
+  <Accordion title="High TTS costs">
+    1. Switch to a cheaper provider (OpenAI vs ElevenLabs)
+    2. Use shorter responses:
+       ```bash
+       simpleclaw config set talk.maxLength 500 --json
+       ```
+    3. Disable auto-talk for non-essential sessions
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Remote Gateway" icon="server" href="/guides/remote-gateway">
+    Run Gateway on remote server with local voice nodes
+  </Card>
+  <Card title="Custom Skills" icon="puzzle-piece" href="/guides/custom-skills">
+    Create voice-activated custom tools
+  </Card>
+  <Card title="Multi-Agent Setup" icon="users" href="/guides/multi-agent-setup">
+    Different voices for different agents
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/guides/troubleshooting">
+    Common voice issues and solutions
+  </Card>
+</CardGroup>

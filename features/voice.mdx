@@ -1,0 +1,213 @@
+---
+title: Voice & TTS
+description: Voice wake mode and text-to-speech features in SimpleClaw
+---
+
+SimpleClaw includes powerful voice capabilities with multiple TTS providers and voice wake mode for hands-free interaction.
+
+## Text-to-Speech (TTS)
+
+SimpleClaw supports multiple TTS providers with automatic fallback and per-message voice customization.
+
+### Supported Providers
+
+- **Edge TTS** - Free, built-in Microsoft Edge voices (default)
+- **OpenAI TTS** - High-quality voices including gpt-4o-mini-tts, tts-1, tts-1-hd
+- **ElevenLabs** - Premium voices with fine-grained control
+
+### Configuration
+
+```yaml
+messages:
+  tts:
+    auto: "always"  # Options: off, always, inbound, tagged
+    mode: "final"   # Options: final, all
+    provider: "edge"  # Options: edge, openai, elevenlabs
+    maxTextLength: 4096
+    timeoutMs: 30000
+    
+    # OpenAI settings
+    openai:
+      apiKey: ${OPENAI_API_KEY}
+      model: "gpt-4o-mini-tts"
+      voice: "alloy"  # alloy, ash, ballad, coral, echo, fable, etc.
+    
+    # ElevenLabs settings
+    elevenlabs:
+      apiKey: ${ELEVENLABS_API_KEY}
+      voiceId: "pMsXgVXv3BLzUgSXRplE"
+      modelId: "eleven_multilingual_v2"
+      voiceSettings:
+        stability: 0.5
+        similarityBoost: 0.75
+        style: 0.0
+        speed: 1.0
+    
+    # Edge TTS settings
+    edge:
+      enabled: true
+      voice: "en-US-MichelleNeural"
+      lang: "en-US"
+      outputFormat: "audio-24khz-48kbitrate-mono-mp3"
+```
+
+### Auto Modes
+
+- `off` - TTS disabled
+- `always` - Convert all responses to speech
+- `inbound` - Only respond with voice when user sends voice
+- `tagged` - Only when message contains `[[tts]]` directives
+
+### Voice Directives
+
+Control TTS behavior inline using `[[tts:...]]` tags:
+
+```markdown
+Here's your answer [[tts:voice=echo]] in a different voice.
+
+[[tts:text]]
+This custom text will be spoken instead of the visible message.
+[[/tts:text]]
+```
+
+Supported directives:
+- `provider=openai|elevenlabs|edge` - Switch provider
+- `voice=alloy` - Change OpenAI voice
+- `voiceid=<id>` - Change ElevenLabs voice
+- `stability=0.7` - ElevenLabs stability (0-1)
+- `speed=1.2` - ElevenLabs speed (0.5-2)
+- `model=tts-1-hd` - Override model
+
+### Text Summarization
+
+Long responses are automatically summarized before TTS conversion:
+
+```yaml
+messages:
+  tts:
+    summaryModel: "gpt-4o-mini"  # Model for summarization
+```
+
+User preferences stored at `~/.openclaw/settings/tts.json`:
+
+```json
+{
+  "tts": {
+    "auto": "always",
+    "provider": "openai",
+    "maxLength": 1500,
+    "summarize": true
+  }
+}
+```
+
+## Voice Wake Mode
+
+Voice wake mode allows hands-free activation using your system's speech recognition.
+
+### How It Works
+
+1. System listens for wake phrase (e.g., "Hey SimpleClaw")
+2. Transcribes your command using macOS dictation or other STT
+3. Sends command to SimpleClaw agent
+4. Returns audio response via TTS
+
+### Platform Support
+
+- **macOS** - Uses built-in dictation and Speech framework
+- **Linux/Windows** - Custom integration required
+
+### Example Use Cases
+
+- "Hey SimpleClaw, what's on my calendar?"
+- "Hey SimpleClaw, summarize my unread emails"
+- "Hey SimpleClaw, set a reminder for 3pm"
+
+### Implementation Details
+
+Voice wake forwarding uses the SimpleClaw CLI:
+
+```bash
+openclaw-mac agent --message "${text}" --thinking low
+```
+
+The wake phrase handler:
+1. Captures speech via system API (src/tts/)
+2. Shells out to SimpleClaw CLI with transcribed text
+3. Agent processes request and returns response
+4. Response is converted to audio via TTS
+5. Audio plays through system speakers
+
+### Provider Fallback
+
+TTS providers are tried in order with automatic fallback:
+
+```typescript
+// From src/tts/tts.ts:513
+const providers = resolveTtsProviderOrder(provider);
+// Example: ["openai", "elevenlabs", "edge"]
+
+for (const provider of providers) {
+  try {
+    // Attempt TTS with this provider
+    const result = await textToSpeech(...);
+    if (result.success) return result;
+  } catch (err) {
+    // Log error and try next provider
+  }
+}
+```
+
+### Audio Formats
+
+Output format varies by channel:
+
+- **Default** - MP3 (44.1kHz, 128kbps)
+- **Telegram** - Opus (48kHz, 64kbps) for voice notes
+- **Telephony** - PCM (22-24kHz) for call integrations
+
+### Custom OpenAI Endpoints
+
+Support for custom TTS endpoints (e.g., Kokoro, LocalAI):
+
+```bash
+export OPENAI_TTS_BASE_URL=http://localhost:8880/v1
+```
+
+When set, model and voice validation is relaxed to allow non-OpenAI models.
+
+### API Reference
+
+Key functions from `src/tts/tts.ts`:
+
+- `textToSpeech()` - Convert text to audio file (src/tts/tts.ts:532)
+- `textToSpeechTelephony()` - PCM audio for telephony (src/tts/tts.ts:702)
+- `maybeApplyTtsToPayload()` - Auto-apply TTS to response (src/tts/tts.ts:791)
+- `buildTtsSystemPromptHint()` - Add TTS guidance to system prompt (src/tts/tts.ts:350)
+
+### Troubleshooting
+
+**No audio output?**
+
+Check TTS status:
+```bash
+openclaw config get messages.tts.auto
+openclaw config get messages.tts.provider
+```
+
+**Provider fails?**
+
+Check API keys:
+```bash
+echo $OPENAI_API_KEY
+echo $ELEVENLABS_API_KEY
+```
+
+**Audio too long?**
+
+Adjust max length:
+```bash
+openclaw config set messages.tts.maxTextLength 2000
+```
+
+Or enable summarization in `~/.openclaw/settings/tts.json`.

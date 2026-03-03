@@ -1,0 +1,215 @@
+---
+title: Installation
+description: Install SimpleClaw on macOS, Linux, or Windows
+---
+
+# Installation
+
+SimpleClaw requires **Node.js 22 or higher**. Follow the platform-specific instructions below.
+
+<Tip>
+Check your Node version with `node --version`. If you need to upgrade, visit [nodejs.org](https://nodejs.org/).
+</Tip>
+
+## Prerequisites
+
+- Node.js ≥ 22
+- npm, pnpm, or bun package manager
+- macOS, Linux, or Windows (WSL2 strongly recommended for Windows)
+
+## Quick Install (Recommended)
+
+The fastest way to install SimpleClaw is via npm:
+
+<CodeGroup>
+```bash npm
+npm install -g simpleclaw@latest
+```
+
+```bash pnpm
+pnpm add -g simpleclaw@latest
+```
+
+```bash bun
+bun add -g simpleclaw@latest
+```
+</CodeGroup>
+
+After installation, run the onboarding wizard:
+
+```bash
+simpleclaw onboard --install-daemon
+```
+
+The wizard will:
+- Configure the gateway
+- Set up your workspace
+- Install the daemon service (launchd on macOS, systemd on Linux)
+- Guide you through channel setup
+- Configure model providers
+
+## Install from Source
+
+For development or to run the latest code:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/asundar43/simpleclaw.git
+    cd simpleclaw
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Prefer `pnpm` for builds from source:
+
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Build the UI and core">
+    ```bash
+    pnpm ui:build  # auto-installs UI deps on first run
+    pnpm build
+    ```
+  </Step>
+
+  <Step title="Run the onboarding wizard">
+    ```bash
+    pnpm simpleclaw onboard --install-daemon
+    ```
+  </Step>
+</Steps>
+
+<Note>
+`pnpm simpleclaw ...` runs TypeScript directly via `tsx`. The `pnpm build` command produces `dist/` for running via Node or the packaged `simpleclaw` binary.
+</Note>
+
+## Platform-Specific Notes
+
+### macOS
+
+- The onboarding wizard can install a **launchd** user service to keep the gateway running
+- The [macOS app](/platforms/macos) provides a menu bar interface with voice wake and canvas
+- Screen recording and accessibility permissions may be required for some features
+
+### Linux
+
+- The wizard can install a **systemd** user service
+- SimpleClaw works great on small Linux instances for remote gateway hosting
+- Device nodes (macOS/iOS/Android) can connect for device-local actions
+
+### Windows
+
+- **WSL2 is strongly recommended** for the best experience
+- Native Windows support is limited; use WSL2 with Ubuntu or Debian
+- Install Node.js inside WSL2, not on Windows directly
+
+## Verification
+
+After installation, verify SimpleClaw is working:
+
+<Steps>
+  <Step title="Check installation">
+    ```bash
+    simpleclaw --version
+    ```
+
+    You should see the version number (e.g., `2026.3.2`).
+  </Step>
+
+  <Step title="Check gateway status">
+    If you installed the daemon:
+
+    ```bash
+    simpleclaw gateway status
+    ```
+
+    You should see the gateway running on port 18789.
+  </Step>
+
+  <Step title="Open the Control UI">
+    ```bash
+    simpleclaw dashboard
+    ```
+
+    This opens `http://127.0.0.1:18789/` in your browser.
+  </Step>
+</Steps>
+
+<Check>
+If the Control UI loads, your gateway is ready to use!
+</Check>
+
+## Manual Gateway Start
+
+If you didn't install the daemon or want to run the gateway manually:
+
+```bash
+simpleclaw gateway --port 18789 --verbose
+```
+
+For development with auto-reload:
+
+```bash
+pnpm gateway:watch
+```
+
+## Development Channels
+
+SimpleClaw follows semantic versioning with multiple release channels:
+
+- **stable**: Tagged releases (`vYYYY.M.D`), npm dist-tag `latest`
+- **beta**: Prerelease tags (`vYYYY.M.D-beta.N`), npm dist-tag `beta`
+- **dev**: Moving head of `main`, npm dist-tag `dev` (when published)
+
+Switch channels:
+
+```bash
+simpleclaw update --channel stable|beta|dev
+```
+
+## Troubleshooting
+
+### Node version too old
+
+SimpleClaw requires Node 22+. Upgrade via [nvm](https://github.com/nvm-sh/nvm) or [nodejs.org](https://nodejs.org/).
+
+### Permission denied errors
+
+If global installation fails, try:
+
+```bash
+npm config set prefix ~/.npm-global
+export PATH=~/.npm-global/bin:$PATH
+```
+
+Then re-run the install command.
+
+### Gateway won't start
+
+Run the diagnostic tool:
+
+```bash
+simpleclaw doctor
+```
+
+This checks for configuration issues, permissions, and conflicts.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your first chat working in under 5 minutes
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Configure models, channels, and routing
+  </Card>
+  <Card title="Add Channels" icon="messages" href="/guides/adding-channels">
+    Connect WhatsApp, Telegram, Discord, and more
+  </Card>
+  <Card title="Security Setup" icon="shield" href="/security/overview">
+    Configure DM pairing and allowlists
+  </Card>
+</CardGroup>

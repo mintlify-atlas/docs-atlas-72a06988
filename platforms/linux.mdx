@@ -1,0 +1,561 @@
+---
+title: "Linux"
+description: "SimpleClaw on Linux - installation, setup, and platform-specific features"
+---
+
+SimpleClaw runs natively on Linux systems with full support for the gateway, CLI, and all core features.
+
+## Overview
+
+SimpleClaw on Linux provides:
+
+- **Gateway server** - WebSocket control plane for sessions, channels, and agents
+- **CLI tools** - full command-line interface for management and interaction
+- **systemd integration** - user service for automatic startup
+- **Docker support** - containerized deployment option
+- **Channel support** - all messaging platforms (WhatsApp, Telegram, Slack, Discord, etc.)
+- **Voice support** - via mobile apps (iOS/Android)
+- **Browser automation** - Playwright/Puppeteer for web tools
+
+## System Requirements
+
+- **Linux distribution** - Ubuntu 20.04+, Debian 11+, Fedora 36+, or similar
+- **Node.js 22+** - required runtime
+- **systemd** - for daemon management (optional)
+- **X11 or Wayland** - for browser automation (optional)
+
+## Installation
+
+### Via npm (Recommended)
+
+Install globally with npm, pnpm, or bun:
+
+```bash
+# Using npm
+npm install -g simpleclaw@latest
+
+# Using pnpm
+pnpm add -g simpleclaw@latest
+
+# Using bun
+bun add -g simpleclaw@latest
+```
+
+### Run Onboarding Wizard
+
+The wizard guides you through setup:
+
+```bash
+simpleclaw onboard --install-daemon
+```
+
+The wizard will:
+1. Configure gateway settings
+2. Set up messaging channels
+3. Authenticate with AI providers
+4. Install systemd user service (optional)
+5. Start the gateway
+
+### Manual Installation
+
+If you prefer manual setup:
+
+```bash
+# Install SimpleClaw
+npm install -g simpleclaw@latest
+
+# Create config directory
+mkdir -p ~/.simpleclaw
+
+# Start gateway
+simpleclaw gateway --port 18789
+```
+
+## Daemon Setup
+
+### systemd User Service
+
+Install as a systemd user service:
+
+```bash
+# Install daemon via wizard
+simpleclaw onboard --install-daemon
+
+# Or manually install daemon
+simpleclaw daemon install
+
+# Start the service
+systemctl --user start simpleclaw-gateway
+
+# Enable auto-start on login
+systemctl --user enable simpleclaw-gateway
+
+# Check status
+systemctl --user status simpleclaw-gateway
+
+# View logs
+journalctl --user -u simpleclaw-gateway -f
+```
+
+### systemd Service File
+
+The service file is installed at:
+```
+~/.config/systemd/user/simpleclaw-gateway.service
+```
+
+Typical configuration:
+```ini
+[Unit]
+Description=SimpleClaw Gateway
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /path/to/simpleclaw.mjs gateway --bind lan --port 18789
+Restart=always
+RestartSec=10
+Environment="HOME=/home/user"
+Environment="NODE_ENV=production"
+
+[Install]
+WantedBy=default.target
+```
+
+### Manual Daemon Management
+
+If you don't use systemd, you can manage the gateway manually:
+
+```bash
+# Start in background
+nohup simpleclaw gateway --port 18789 > /tmp/simpleclaw-gateway.log 2>&1 &
+
+# Check process
+ps aux | grep simpleclaw
+
+# View logs
+tail -f /tmp/simpleclaw-gateway.log
+
+# Stop gateway
+pkill -f simpleclaw-gateway
+```
+
+## Configuration
+
+### Config Directory
+
+SimpleClaw stores configuration in `~/.simpleclaw/`:
+
+```
+~/.simpleclaw/
+├── config.yaml              # Main configuration
+├── credentials/             # API keys and tokens
+│   ├── anthropic.json
+│   ├── openai.json
+│   └── ...
+├── agents/                  # Per-agent data
+│   └── main/
+│       ├── sessions/        # Session logs
+│       └── workspace/       # Agent workspace
+├── channels/                # Channel state
+├── plugins/                 # Installed plugins
+└── logs/                    # Gateway logs
+```
+
+### Gateway Configuration
+
+Edit `~/.simpleclaw/config.yaml`:
+
+```yaml
+gateway:
+  mode: local
+  bind: lan          # or 'loopback' for localhost-only
+  port: 18789
+  token: your-gateway-token  # for auth
+
+channels:
+  telegram:
+    enabled: true
+    token: "${TELEGRAM_BOT_TOKEN}"
+  
+  discord:
+    enabled: true
+    token: "${DISCORD_BOT_TOKEN}"
+
+models:
+  default: anthropic/claude-4.5-sonnet
+  providers:
+    anthropic:
+      apiKey: "${ANTHROPIC_API_KEY}"
+```
+
+Use environment variables or credential files for sensitive values.
+
+### Environment Variables
+
+Set in `~/.profile` or `~/.bashrc`:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export TELEGRAM_BOT_TOKEN="123456:ABC..."
+export DISCORD_BOT_TOKEN="MTk..."
+export SIMPLECLAW_GATEWAY_TOKEN="your-token"
+```
+
+## Running the Gateway
+
+### Start Gateway
+
+```bash
+# Start with defaults (loopback:18789)
+simpleclaw gateway
+
+# Bind to all interfaces
+simpleclaw gateway --bind lan --port 18789
+
+# Verbose logging
+simpleclaw gateway --verbose
+
+# Allow unconfigured channels
+simpleclaw gateway --allow-unconfigured
+```
+
+### Check Status
+
+```bash
+# Gateway status
+simpleclaw gateway status
+
+# Channel status
+simpleclaw channels status
+
+# Node status
+simpleclaw nodes list
+```
+
+### Stop Gateway
+
+```bash
+# If running as systemd service
+systemctl --user stop simpleclaw-gateway
+
+# If running in foreground
+Ctrl+C
+
+# If running in background
+pkill -f simpleclaw-gateway
+```
+
+## Browser Automation
+
+For web-based tools and browser automation:
+
+### Install Chromium
+
+SimpleClaw uses Playwright for browser automation:
+
+```bash
+# Install Playwright and browsers
+npx playwright install chromium
+
+# Install system dependencies
+npx playwright install-deps chromium
+```
+
+### Headless Mode
+
+On servers without a display:
+
+```bash
+# Install Xvfb for virtual display
+sudo apt-get install xvfb
+
+# Run with virtual display
+xvfb-run simpleclaw gateway
+```
+
+### Docker with Browser
+
+Build Docker image with browser pre-installed:
+
+```bash
+docker build \
+  --build-arg SIMPLECLAW_INSTALL_BROWSER=1 \
+  -t simpleclaw:browser \
+  .
+```
+
+## Docker Deployment
+
+### Using Docker Compose
+
+Create `docker-compose.yml`:
+
+```yaml
+services:
+  simpleclaw-gateway:
+    image: simpleclaw:latest
+    environment:
+      SIMPLECLAW_GATEWAY_TOKEN: ${SIMPLECLAW_GATEWAY_TOKEN}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    volumes:
+      - ./config:/home/node/.simpleclaw
+      - ./workspace:/home/node/.simpleclaw/workspace
+    ports:
+      - "18789:18789"
+    restart: unless-stopped
+    command:
+      - node
+      - dist/index.js
+      - gateway
+      - --bind
+      - lan
+      - --port
+      - "18789"
+```
+
+Run:
+
+```bash
+docker compose up -d
+```
+
+### Build Docker Image
+
+From repository:
+
+```bash
+git clone https://github.com/simpleclaw/simpleclaw.git
+cd simpleclaw
+
+# Build image
+docker build -t simpleclaw:local .
+
+# Build with browser support
+docker build \
+  --build-arg SIMPLECLAW_INSTALL_BROWSER=1 \
+  -t simpleclaw:browser \
+  .
+
+# Run container
+docker run -d \
+  -p 18789:18789 \
+  -v $(pwd)/config:/home/node/.simpleclaw \
+  -e SIMPLECLAW_GATEWAY_TOKEN=your-token \
+  simpleclaw:local
+```
+
+### Docker Security
+
+The Docker image runs as non-root user (`node`, uid 1000):
+
+- Reduces attack surface
+- Prevents container escape via root privileges
+- Gateway binds to loopback by default
+
+For external health checks:
+
+```bash
+docker run \
+  -e SIMPLECLAW_GATEWAY_TOKEN=your-token \
+  simpleclaw:latest \
+  node simpleclaw.mjs gateway --bind lan --allow-unconfigured
+```
+
+## CLI Usage
+
+### Send Messages
+
+```bash
+# Send via default channel
+simpleclaw message send --to +1234567890 --message "Hello"
+
+# Talk to agent
+simpleclaw agent --message "What's the weather?" --thinking high
+
+# Send with file attachment
+simpleclaw message send --to +1234567890 --message "Check this" --file ~/document.pdf
+```
+
+### Manage Channels
+
+```bash
+# List channels
+simpleclaw channels list
+
+# Channel status
+simpleclaw channels status
+
+# Enable channel
+simpleclaw config set channels.telegram.enabled true
+
+# Set channel token
+simpleclaw config set channels.telegram.token "123456:ABC..."
+```
+
+### Manage Nodes
+
+```bash
+# List connected nodes
+simpleclaw nodes list
+
+# Pending pairing requests
+simpleclaw nodes pending
+
+# Approve node
+simpleclaw nodes approve <requestId>
+
+# Remove node
+simpleclaw nodes remove <nodeId>
+```
+
+## Troubleshooting
+
+### Gateway Won't Start
+
+Check for port conflicts:
+
+```bash
+# Check if port is in use
+sudo ss -ltnp | grep 18789
+
+# Kill conflicting process
+sudo kill <pid>
+
+# Or use different port
+simpleclaw gateway --port 18790
+```
+
+### Permission Errors
+
+Ensure config directory is writable:
+
+```bash
+chmod 755 ~/.simpleclaw
+chown -R $USER:$USER ~/.simpleclaw
+```
+
+### systemd Service Fails
+
+Check service status and logs:
+
+```bash
+systemctl --user status simpleclaw-gateway
+journalctl --user -u simpleclaw-gateway -n 50
+```
+
+Reload after config changes:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user restart simpleclaw-gateway
+```
+
+### Browser Automation Fails
+
+Install missing dependencies:
+
+```bash
+# Install Playwright dependencies
+npx playwright install-deps
+
+# Or install Xvfb for headless
+sudo apt-get install xvfb
+```
+
+### Config Not Loading
+
+Run diagnostics:
+
+```bash
+simpleclaw doctor
+```
+
+This checks for:
+- Missing configuration
+- Permission issues
+- Deprecated settings
+- Channel misconfigurations
+
+## Platform-Specific Features
+
+### Desktop Notifications
+
+Linux desktop notifications via `notify-send`:
+
+```bash
+# Install libnotify (if not already installed)
+sudo apt-get install libnotify-bin  # Debian/Ubuntu
+sudo dnf install libnotify           # Fedora
+```
+
+### Voice Features
+
+Voice Wake and Talk Mode are available via mobile apps:
+
+- Install SimpleClaw iOS or Android app
+- Connect to gateway as a node
+- Use voice features on mobile device
+
+## Security Considerations
+
+### Firewall Configuration
+
+Allow gateway port:
+
+```bash
+# ufw (Ubuntu/Debian)
+sudo ufw allow 18789/tcp
+
+# firewalld (Fedora/RHEL)
+sudo firewall-cmd --add-port=18789/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+### Bind Address
+
+- `--bind loopback` - localhost only (most secure)
+- `--bind lan` - all interfaces (for mobile apps)
+
+### Token Authentication
+
+Set a gateway token:
+
+```bash
+# Set via config
+simpleclaw config set gateway.token "your-secure-token"
+
+# Or via environment variable
+export SIMPLECLAW_GATEWAY_TOKEN="your-secure-token"
+```
+
+Clients must provide this token to connect.
+
+## Performance Tuning
+
+### Node.js Memory
+
+Increase heap size for large workloads:
+
+```bash
+export NODE_OPTIONS="--max-old-space-size=4096"
+simpleclaw gateway
+```
+
+### systemd Resource Limits
+
+Add to service file:
+
+```ini
+[Service]
+MemoryMax=2G
+CPUQuota=200%
+```
+
+## Related Documentation
+
+- [Gateway Configuration](/configuration)
+- [Docker Deployment](/platforms/docker)
+- [CLI Reference](/cli/gateway)
+- [Channel Setup](/channels/overview)
+- [Nodes](/features/voice)

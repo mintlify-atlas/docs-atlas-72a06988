@@ -1,0 +1,392 @@
+---
+title: "Multi-Agent Setup"
+description: "Create specialized agents for different tasks and route conversations intelligently"
+---
+
+# Multi-Agent Setup
+
+SimpleClaw supports multiple agents, each with its own workspace, model configuration, and session store. This lets you create specialized agents for different purposes.
+
+## Why Use Multiple Agents?
+
+- **Specialization** - Different agents for coding, writing, research, etc.
+- **Isolation** - Separate workspaces and session histories
+- **Model Optimization** - Use different models for different tasks
+- **Channel Routing** - Route specific channels to specific agents
+- **Cost Control** - Use cheaper models for simple tasks
+
+## Creating Your First Agent
+
+<Steps>
+  <Step title="Create the Agent">
+    ```bash
+    simpleclaw agents create coding \
+      --name "Coding Assistant" \
+      --model "anthropic/claude-opus-4-6" \
+      --workspace "~/.simpleclaw/agents/coding"
+    ```
+  </Step>
+
+  <Step title="Customize the Agent Workspace">
+    Edit the agent's AGENTS.md file:
+
+    ```bash
+    nano ~/.simpleclaw/agents/coding/AGENTS.md
+    ```
+
+    Add specialized instructions:
+    ```markdown
+    # Coding Assistant
+
+    You are a specialized coding assistant. Focus on:
+
+    - Writing clean, maintainable code
+    - Following best practices and design patterns
+    - Providing code examples with explanations
+    - Debugging and optimization
+
+    ## Code Style
+
+    - Use TypeScript for examples unless specified otherwise
+    - Include type annotations
+    - Add brief comments for complex logic
+    - Follow the repository's existing style
+    ```
+  </Step>
+
+  <Step title="Test the Agent">
+    ```bash
+    simpleclaw agent --agent-id coding --message "Write a TypeScript function to merge two sorted arrays"
+    ```
+  </Step>
+</Steps>
+
+## Agent Configuration
+
+### Via CLI
+
+```bash
+# List all agents
+simpleclaw agents list
+
+# Create agent
+simpleclaw agents create <id> --name "<name>" --model "<model>"
+
+# Update agent
+simpleclaw agents update <id> --model "<new-model>"
+
+# Delete agent
+simpleclaw agents delete <id>
+```
+
+### Via Config File
+
+Add agents to `~/.simpleclaw/simpleclaw.json`:
+
+```json
+{
+  "agents": {
+    "main": {
+      "model": "anthropic/claude-opus-4-6",
+      "workspace": "~/.simpleclaw/workspace"
+    },
+    "coding": {
+      "model": "anthropic/claude-opus-4-6",
+      "workspace": "~/.simpleclaw/agents/coding",
+      "identity": "Coding Assistant - Expert in software development"
+    },
+    "research": {
+      "model": "anthropic/claude-sonnet-4",
+      "workspace": "~/.simpleclaw/agents/research",
+      "identity": "Research Assistant - Specializing in information gathering"
+    },
+    "writer": {
+      "model": "openai/gpt-5.2-mini",
+      "workspace": "~/.simpleclaw/agents/writer",
+      "identity": "Writing Assistant - Focus on clear, engaging content"
+    }
+  }
+}
+```
+
+## Routing Messages to Agents
+
+### Channel-Based Routing
+
+Route entire channels to specific agents:
+
+```json
+{
+  "routing": {
+    "channels": {
+      "telegram": "coding",
+      "slack": "work",
+      "whatsapp": "main"
+    }
+  }
+}
+```
+
+### Account-Based Routing
+
+Route channel accounts to agents:
+
+```json
+{
+  "routing": {
+    "accounts": {
+      "telegram:work-bot": "coding",
+      "telegram:personal-bot": "main",
+      "discord:dev-server": "coding"
+    }
+  }
+}
+```
+
+### Peer-Based Routing
+
+Route specific users/groups to agents:
+
+```json
+{
+  "routing": {
+    "peers": {
+      "whatsapp:+15551234567": "personal",
+      "discord:guild-123:channel-456": "coding",
+      "telegram:@dev_team": "coding"
+    }
+  }
+}
+```
+
+## Routing Precedence
+
+When a message arrives, SimpleClaw checks routing rules in this order:
+
+1. **Peer binding** - Specific user/channel/group
+2. **Parent peer** - Thread parent
+3. **Guild + roles** - Discord guild with role match
+4. **Guild** - Discord guild
+5. **Team** - Slack team
+6. **Account** - Channel account
+7. **Channel** - Messaging platform
+8. **Default** - Falls back to `main` agent
+
+## Agent Workspace Structure
+
+Each agent has its own workspace:
+
+```
+~/.simpleclaw/agents/<agent-id>/
+├── AGENTS.md          # Agent instructions
+├── SOUL.md            # Personality and tone
+├── TOOLS.md           # Tool usage guidelines
+├── sessions/          # Session history
+└── skills/            # Agent-specific skills
+```
+
+### Customizing Agent Behavior
+
+**AGENTS.md** - Core instructions:
+```markdown
+# Research Assistant
+
+You are a research assistant specializing in finding and summarizing information.
+
+## Approach
+
+- Start with authoritative sources
+- Verify claims across multiple sources
+- Cite sources with URLs
+- Summarize complex topics clearly
+
+## Tools
+
+- Use browser.navigate for research
+- Use bash for data processing
+- Use sessions_send to share findings with other agents
+```
+
+**SOUL.md** - Personality:
+```markdown
+# Personality
+
+You are thorough, analytical, and objective. You:
+
+- Present information without bias
+- Acknowledge uncertainty when appropriate
+- Provide multiple perspectives
+- Focus on facts and evidence
+```
+
+## Agent Collaboration
+
+Agents can communicate using session tools:
+
+```bash
+# From one agent to another
+simpleclaw agent --agent-id coding --message "Find the best sorting algorithm for large datasets and send your findings to the research agent"
+```
+
+The agent can use:
+- `sessions_list` - Discover other agents
+- `sessions_send` - Message another agent's session
+- `sessions_history` - Read another agent's transcript
+
+## Example: Specialized Agent Fleet
+
+### Coding Agent
+
+```json
+{
+  "coding": {
+    "model": "anthropic/claude-opus-4-6",
+    "workspace": "~/.simpleclaw/agents/coding",
+    "identity": "Expert software engineer",
+    "tools": {
+      "allow": ["bash", "read", "write", "edit", "browser"],
+      "deny": ["sessions_send"]
+    }
+  }
+}
+```
+
+### Research Agent
+
+```json
+{
+  "research": {
+    "model": "anthropic/claude-sonnet-4",
+    "workspace": "~/.simpleclaw/agents/research",
+    "identity": "Research specialist",
+    "tools": {
+      "allow": ["browser", "bash", "read", "sessions_send"],
+      "deny": ["write", "edit"]
+    }
+  }
+}
+```
+
+### Writing Agent
+
+```json
+{
+  "writer": {
+    "model": "openai/gpt-5.2-mini",
+    "workspace": "~/.simpleclaw/agents/writer",
+    "identity": "Professional writer and editor",
+    "tools": {
+      "allow": ["read", "write", "edit"],
+      "deny": ["bash", "browser"]
+    }
+  }
+}
+```
+
+## Per-Agent Skills
+
+Install skills specific to an agent:
+
+```bash
+# Install skill for coding agent
+simpleclaw skills install typescript-expert --agent coding
+
+# Install skill for research agent
+simpleclaw skills install web-research --agent research
+```
+
+Skills are stored in the agent's workspace:
+```
+~/.simpleclaw/agents/coding/skills/typescript-expert/
+```
+
+## Agent Status
+
+View all agents:
+
+```bash
+simpleclaw agents list
+```
+
+Example output:
+```
+┌─ Agents ──────────────────────────────────────────────┐
+│ ID        Model                      Sessions  │
+├────────────────────────────────────────────────────┤
+│ main      claude-opus-4-6            12        │
+│ coding    claude-opus-4-6            8         │
+│ research  claude-sonnet-4            3         │
+│ writer    gpt-5.2-mini               5         │
+└────────────────────────────────────────────────────┘
+```
+
+## Switching Agents Mid-Conversation
+
+Route a message to a specific agent:
+
+```bash
+simpleclaw agent --agent-id research --message "Research best practices for API design"
+```
+
+Or via channel command:
+```
+/agent research
+What are the latest trends in machine learning?
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Agent not found">
+    Verify the agent exists:
+    ```bash
+    simpleclaw agents list
+    ```
+
+    Check config:
+    ```bash
+    simpleclaw config get agents
+    ```
+  </Accordion>
+
+  <Accordion title="Routing not working">
+    Check routing rules:
+    ```bash
+    simpleclaw config get routing
+    ```
+
+    View debug logs:
+    ```bash
+    simpleclaw gateway logs --level debug | grep routing
+    ```
+  </Accordion>
+
+  <Accordion title="Agent using wrong model">
+    Update agent model:
+    ```bash
+    simpleclaw agents update <agent-id> --model "<model-id>"
+    ```
+
+    Or via config:
+    ```bash
+    simpleclaw config set agents.<agent-id>.model '"<model-id>"' --json
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Custom Skills" icon="puzzle-piece" href="/guides/custom-skills">
+    Add specialized tools to agents
+  </Card>
+  <Card title="Voice Setup" icon="microphone" href="/guides/voice-setup">
+    Enable voice interaction with agents
+  </Card>
+  <Card title="Remote Gateway" icon="server" href="/guides/remote-gateway">
+    Run agents on a remote server
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Trigger agent runs from external events
+  </Card>
+</CardGroup>

@@ -1,0 +1,469 @@
+---
+title: Browser Control
+description: Automated browser control with Playwright integration
+---
+
+SimpleClaw's Browser Control feature enables AI agents to interact with web pages through an integrated Playwright-based automation server.
+
+## Overview
+
+Browser control provides:
+
+- **Multi-profile management** - Run multiple isolated browser sessions
+- **Remote browser support** - Connect to Browserless, external Chrome, etc.
+- **Playwright integration** - Full CDP (Chrome DevTools Protocol) access
+- **Extension relay** - Browser extension-based control for certain profiles
+- **Snapshot & interaction** - Take page snapshots, click, type, navigate
+
+## Architecture
+
+Browser control runs as an HTTP server (src/browser/server.ts:21):
+
+```typescript
+const server = await startBrowserControlServerFromConfig();
+// Listens on http://127.0.0.1:<controlPort>/
+```
+
+**Components:**
+
+1. **Control Server** - REST API for browser operations (src/browser/server.ts)
+2. **Profile Manager** - Manages browser profiles and state (src/browser/profiles.ts)
+3. **Playwright Bridge** - CDP connection and page control (src/browser/pw-session.ts)
+4. **Extension Relay** - WebSocket bridge for browser extensions (src/browser/extension-relay.ts)
+
+## Configuration
+
+```yaml
+browser:
+  enabled: true
+  controlPort: 8910
+  
+  profiles:
+    default:
+      enabled: true
+      browser: "chromium"  # chromium, chrome, edge, firefox
+      headless: false
+      color: "blue"
+      cdpPort: 9222
+      
+      # Optional remote browser
+      cdpUrl: "ws://localhost:3000"  # Browserless
+      attachOnly: true  # Don't launch, just attach
+      
+      # Custom executable
+      executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+      
+    work:
+      enabled: true
+      browser: "chrome"
+      headless: false
+      color: "green"
+      cdpPort: 9223
+```
+
+## Browser Profiles
+
+Profiles are isolated browser instances with separate:
+
+- User data directory (`~/.openclaw/browser/<profile>`)
+- CDP port
+- Extension state
+- Cookies, storage, history
+
+### Profile Operations
+
+```bash
+# List all profiles
+curl http://localhost:8910/profiles
+
+# Get default profile status
+curl http://localhost:8910/
+
+# Get specific profile status
+curl http://localhost:8910/?profile=work
+
+# Start profile
+curl -X POST http://localhost:8910/start?profile=work
+
+# Stop profile
+curl -X POST http://localhost:8910/stop?profile=work
+
+# Reset profile (archive user data)
+curl -X POST http://localhost:8910/reset-profile?profile=work
+```
+
+### Creating Profiles
+
+```bash
+# Create new profile
+curl -X POST http://localhost:8910/profiles/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "testing",
+    "color": "purple",
+    "driver": "simpleclaw"
+  }'
+
+# Create remote profile (Browserless)
+curl -X POST http://localhost:8910/profiles/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "remote",
+    "cdpUrl": "ws://localhost:3000",
+    "driver": "simpleclaw"
+  }'
+```
+
+### Deleting Profiles
+
+```bash
+curl -X DELETE http://localhost:8910/profiles/testing
+```
+
+## Browser Operations
+
+From `src/browser/client.ts`, the control API provides:
+
+### Status
+
+```typescript
+type BrowserStatus = {
+  enabled: boolean;
+  profile: string;
+  running: boolean;
+  cdpReady: boolean;
+  pid: number | null;
+  cdpPort: number;
+  cdpUrl?: string;
+  chosenBrowser: string | null;
+  userDataDir: string | null;
+  color: string;
+  headless: boolean;
+  attachOnly: boolean;
+};
+```
+
+### Tabs
+
+```bash
+# List tabs
+curl http://localhost:8910/tabs?profile=default
+
+# Open new tab
+curl -X POST http://localhost:8910/tabs/open \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com", "profile": "default"}'
+
+# Close tab
+curl -X POST http://localhost:8910/tabs/close \
+  -H "Content-Type: application/json" \
+  -d '{"targetId": "...", "profile": "default"}'
+```
+
+### Snapshots
+
+Capture page accessibility tree or AI-optimized snapshot:
+
+```bash
+# ARIA snapshot (accessibility tree)
+curl -X POST http://localhost:8910/agent/snapshot \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "format": "aria",
+    "profile": "default"
+  }'
+
+# AI snapshot (optimized for LLMs)
+curl -X POST http://localhost:8910/agent/snapshot \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "format": "ai",
+    "labels": true,
+    "profile": "default"
+  }'
+```
+
+AI snapshot format (src/browser/pw-role-snapshot.ts):
+
+```
+URL: https://example.com
+
+[1] button "Sign In"
+[2] link "Pricing"
+[3] textbox "Search" (empty)
+[4] heading "Welcome"
+```
+
+### Actions
+
+Interact with page elements:
+
+```bash
+# Click element
+curl -X POST http://localhost:8910/agent/act \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "actions": [
+      {"type": "click", "ref": "1"}  # Click [1] button
+    ],
+    "profile": "default"
+  }'
+
+# Type text
+curl -X POST http://localhost:8910/agent/act \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "actions": [
+      {"type": "fill", "ref": "3", "value": "search query"},
+      {"type": "press", "key": "Enter"}
+    ]
+  }'
+
+# Navigate
+curl -X POST http://localhost:8910/agent/act \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "actions": [
+      {"type": "navigate", "url": "https://news.ycombinator.com"}
+    ]
+  }'
+```
+
+Supported action types (src/browser/routes/agent.act.ts):
+- `click` - Click element by ref
+- `fill` - Fill input/textarea
+- `press` - Press keyboard key
+- `navigate` - Navigate to URL
+- `scroll` - Scroll to element or position
+- `hover` - Hover over element
+- `screenshot` - Take screenshot
+
+## Playwright Integration
+
+Browser control uses Playwright under the hood (src/browser/pw-session.ts):
+
+```typescript
+// Launch browser with CDP
+const browser = await playwright.chromium.launch({
+  headless: config.headless,
+  executablePath: config.executablePath,
+  args: [
+    `--remote-debugging-port=${config.cdpPort}`,
+    `--user-data-dir=${userDataDir}`,
+    ...(config.noSandbox ? ['--no-sandbox'] : [])
+  ]
+});
+
+// Or connect to remote browser
+const browser = await playwright.chromium.connectOverCDP(cdpUrl);
+```
+
+### CDP Endpoints
+
+```bash
+# CDP WebSocket URL
+ws://localhost:9222/devtools/browser/<id>
+
+# CDP HTTP endpoints
+http://localhost:9222/json/version
+http://localhost:9222/json/list
+http://localhost:9222/json/new
+```
+
+## Extension Relay
+
+For profiles with `driver: extension`, SimpleClaw provides a WebSocket relay (src/browser/extension-relay.ts):
+
+```javascript
+// Browser extension connects to:
+ws://localhost:8910/extension/relay?profile=default&token=...
+
+// Extension forwards CDP messages:
+ws.send(JSON.stringify({
+  id: 1,
+  method: "Runtime.evaluate",
+  params: { expression: "document.title" }
+}));
+```
+
+**Use case:** Control browsers that don't support `--remote-debugging-port` (e.g., some Firefox builds, Safari).
+
+## Authentication
+
+Browser control server supports token or password auth (src/browser/control-auth.ts):
+
+```yaml
+gateway:
+  auth:
+    token: "${GATEWAY_AUTH_TOKEN}"
+    # or
+    password: "${GATEWAY_PASSWORD}"
+```
+
+Requests must include:
+
+```bash
+curl -H "Authorization: Bearer ${GATEWAY_AUTH_TOKEN}" \
+  http://localhost:8910/
+
+# or
+curl -H "X-SimpleClaw-Password: ${GATEWAY_PASSWORD}" \
+  http://localhost:8910/
+```
+
+## Remote Browsers
+
+### Browserless Cloud
+
+```yaml
+browser:
+  profiles:
+    cloud:
+      enabled: true
+      cdpUrl: "wss://chrome.browserless.io?token=${BROWSERLESS_TOKEN}"
+      attachOnly: true
+      driver: "simpleclaw"
+```
+
+### Self-hosted Chrome
+
+```bash
+# Run Chrome with remote debugging
+docker run -p 9222:9222 \
+  browserless/chrome:latest \
+  --remote-debugging-port=9222
+```
+
+```yaml
+browser:
+  profiles:
+    docker:
+      cdpUrl: "ws://localhost:9222"
+      attachOnly: true
+```
+
+## Storage & State
+
+Browser profiles persist state to disk:
+
+```
+~/.openclaw/browser/
+  default/               # Default profile user data
+    Cache/
+    Cookies
+    Local Storage/
+    IndexedDB/
+  work/                  # Work profile
+  .archived/             # Reset profiles moved here
+    default-2024-03-03-123456/
+```
+
+### Storage Operations
+
+```bash
+# Save storage to JSON
+curl -X POST http://localhost:8910/agent/storage/save \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "key": "backup-2024",
+    "profile": "default"
+  }'
+
+# Load storage from JSON
+curl -X POST http://localhost:8910/agent/storage/load \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "key": "backup-2024"
+  }'
+```
+
+Storage saved to `~/.openclaw/browser/<profile>/storage/<key>.json`
+
+## Screenshots
+
+Capture full page or element screenshots:
+
+```bash
+curl -X POST http://localhost:8910/agent/act \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetId": "page-123",
+    "actions": [
+      {
+        "type": "screenshot",
+        "path": "/tmp/screenshot.png",
+        "fullPage": true
+      }
+    ]
+  }'
+```
+
+Screenshot options:
+- `path` - Save location
+- `fullPage` - Capture entire scrollable page
+- `clip` - Crop to specific region
+- `type` - png or jpeg
+
+## Troubleshooting
+
+**Browser won't start?**
+
+Check logs:
+```bash
+tail -f ~/.openclaw/logs/gateway.log | grep browser
+```
+
+Verify executable:
+```bash
+ls /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome
+```
+
+**CDP connection refused?**
+
+Check if port is in use:
+```bash
+lsof -i :9222
+```
+
+Kill existing Chrome:
+```bash
+pkill -9 Chrome
+```
+
+**Extension relay not connecting?**
+
+Verify WebSocket URL:
+```javascript
+console.log(ws.url);
+// Should be: ws://localhost:8910/extension/relay?profile=...
+```
+
+**Actions timing out?**
+
+Increase timeout:
+```yaml
+browser:
+  profiles:
+    default:
+      timeoutMs: 60000  # 60 seconds
+```
+
+## API Reference
+
+Key files in `src/browser/`:
+
+- `server.ts` - Main HTTP server (src/browser/server.ts:21)
+- `client.ts` - TypeScript client library (src/browser/client.ts:1)
+- `routes/agent.ts` - Agent interaction routes
+- `routes/agent.act.ts` - Page action handlers
+- `routes/agent.snapshot.ts` - Snapshot generation
+- `pw-session.ts` - Playwright session management
+- `profiles.ts` - Profile configuration
+- `extension-relay.ts` - Extension WebSocket relay

@@ -1,0 +1,136 @@
+---
+title: "API Overview"
+description: "SimpleClaw Gateway API architecture and protocols"
+---
+
+# API Overview
+
+SimpleClaw's Gateway provides a WebSocket-based API for real-time communication between clients, agents, and channels. The API uses a binary framing protocol with JSON-RPC style request/response patterns.
+
+## Architecture
+
+The Gateway API is the central control plane for SimpleClaw, managing:
+
+- **Session Management** - Agent sessions, context, and state
+- **Channel Connections** - Messaging platform integrations (WhatsApp, Telegram, Slack, Discord, etc.)
+- **Agent Routing** - Message routing to appropriate agents based on channel, account, and peer
+- **Tool Execution** - Browser control, system commands, cron jobs, and custom tools
+- **Configuration** - Dynamic config updates and schema validation
+- **Device Pairing** - Secure device-to-gateway authentication
+
+## Core Concepts
+
+<CardGroup cols={2}>
+  <Card title="WebSocket Protocol" icon="plug" href="/api/websocket">
+    Binary frame-based protocol for real-time bidirectional communication
+  </Card>
+  <Card title="Protocol Schema" icon="code" href="/api/protocol">
+    TypeBox schemas for all request/response/event types
+  </Card>
+  <Card title="Plugin SDK" icon="puzzle-piece" href="/api/plugin-sdk">
+    Build custom channel and provider plugins
+  </Card>
+  <Card title="Channel Plugins" icon="comments" href="/api/channel-plugins">
+    Implement messaging platform integrations
+  </Card>
+</CardGroup>
+
+## Protocol Layers
+
+### 1. Transport Layer
+
+The Gateway uses **WebSocket (ws://)** for local connections and **WSS (wss://)** for remote/Tailscale connections.
+
+Default bind: `ws://127.0.0.1:18789`
+
+### 2. Framing Layer
+
+All messages use a discriminated union frame format:
+
+- **Request Frame** (`type: "req"`) - Client sends method call
+- **Response Frame** (`type: "res"`) - Server returns result or error
+- **Event Frame** (`type: "event"`) - Server pushes state changes
+
+### 3. Method Layer
+
+JSON-RPC style methods organized by domain:
+
+| Domain | Methods | Purpose |
+|--------|---------|----------|
+| `agent.*` | `agent.identity`, `agent.wait` | Agent identification and control |
+| `agents.*` | `agents.list`, `agents.create`, `agents.update` | Multi-agent management |
+| `chat.*` | `chat.send`, `chat.abort`, `chat.inject` | Conversation control |
+| `channels.*` | `channels.status`, `channels.logout` | Channel lifecycle |
+| `config.*` | `config.get`, `config.set`, `config.patch` | Configuration management |
+| `sessions.*` | `sessions.list`, `sessions.patch`, `sessions.reset` | Session control |
+| `cron.*` | `cron.list`, `cron.add`, `cron.update` | Scheduled tasks |
+| `nodes.*` | `node.list`, `node.invoke` | Device node execution |
+
+## Event Streams
+
+The Gateway pushes real-time events to connected clients:
+
+- **`chat`** - Agent responses, tool execution, thinking updates
+- **`agent`** - Agent state changes (model, thinking level, etc.)
+- **`tick`** - Periodic heartbeat (default 30s interval)
+- **`shutdown`** - Gateway restart notification
+
+## Authentication
+
+<Steps>
+  <Step title="Connect Phase">
+    Client sends `ConnectParams` with protocol version, client info, and optional device auth.
+  </Step>
+  <Step title="Hello Response">
+    Server responds with `HelloOk` containing protocol version, available methods/events, and snapshot.
+  </Step>
+  <Step title="Authenticated Session">
+    All subsequent frames are authenticated. Device tokens enable multi-device access.
+  </Step>
+</Steps>
+
+## Client Libraries
+
+The Gateway protocol is designed for:
+
+- **macOS app** - Swift/SwiftUI native client
+- **iOS/Android apps** - Mobile nodes with device-specific tools
+- **CLI** - TypeScript client using the same protocol
+- **Web UI** - React/WebSocket dashboard and WebChat
+
+## Rate Limits
+
+```json
+{
+  "policy": {
+    "maxPayload": 10485760,       // 10MB per message
+    "maxBufferedBytes": 52428800, // 50MB total buffer
+    "tickIntervalMs": 30000       // 30s heartbeat
+  }
+}
+```
+
+## Error Handling
+
+All errors use the `ErrorShape` schema:
+
+```typescript
+interface ErrorShape {
+  code: string;          // Error code (e.g., "INVALID_PARAMS")
+  message: string;       // Human-readable message
+  details?: unknown;     // Optional error context
+  retryable?: boolean;   // Whether retry is recommended
+  retryAfterMs?: number; // Suggested retry delay
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="WebSocket Reference" icon="link" href="/api/websocket">
+    Deep dive into connection flow and frame types
+  </Card>
+  <Card title="Build a Plugin" icon="code" href="/api/plugin-sdk">
+    Create custom channel or provider plugins
+  </Card>
+</CardGroup>

@@ -1,0 +1,440 @@
+---
+title: "Provider Plugins"
+description: "Build custom LLM providers and tool integrations"
+---
+
+# Provider Plugins
+
+Provider plugins extend SimpleClaw with custom LLM providers, memory systems, and specialized tools.
+
+## Provider Plugin Interface
+
+```typescript
+import type {
+  SimpleClawPluginService,
+  SimpleClawPluginServiceContext,
+  ProviderAuthContext,
+  ProviderAuthResult,
+} from "simpleclaw/plugin-sdk";
+
+export interface SimpleClawPluginService {
+  id: string;
+  name?: string;
+  version?: string;
+  
+  // Lifecycle
+  init?(ctx: SimpleClawPluginServiceContext): Promise<void>;
+  shutdown?(): Promise<void>;
+  
+  // Authentication
+  auth?(ctx: ProviderAuthContext): Promise<ProviderAuthResult>;
+  
+  // Provider methods
+  invoke?(ctx: any, request: any): Promise<any>;
+  models?(): Promise<ModelInfo[]>;
+  
+  // HTTP routes
+  routes?: PluginRoute[];
+}
+```
+
+## LLM Provider Example
+
+```typescript
+import type {
+  SimpleClawPluginService,
+  SimpleClawPluginServiceContext,
+} from "simpleclaw/plugin-sdk";
+
+export const customLLMProvider: SimpleClawPluginService = {
+  id: "custom-llm",
+  name: "Custom LLM Provider",
+  version: "1.0.0",
+  
+  async init(ctx: SimpleClawPluginServiceContext) {
+    ctx.logger.info("Initializing Custom LLM provider");
+    
+    // Load API keys from config
+    const config = await ctx.config.get("providers.customllm");
+    this.apiKey = config?.apiKey;
+  },
+  
+  async auth(ctx) {
+    // OAuth flow or API key validation
+    try {
+      const response = await fetch("https://api.example.com/auth", {
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+        },
+      });
+      
+      const profile = await response.json();
+      
+      return {
+        success: true,
+        profile: {
+          id: profile.userId,
+          name: profile.username,
+          email: profile.email,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+  
+  async models() {
+    return [
+      {
+        id: "custom-llm/gpt-ultra",
+        name: "GPT Ultra",
+        contextWindow: 200000,
+        maxOutputTokens: 8192,
+      },
+      {
+        id: "custom-llm/gpt-mini",
+        name: "GPT Mini",
+        contextWindow: 128000,
+        maxOutputTokens: 4096,
+      },
+    ];
+  },
+  
+  async invoke(ctx, request) {
+    const { messages, model, temperature, maxTokens } = request;
+    
+    const response = await fetch("https://api.example.com/chat", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+    
+    const data = await response.json();
+    
+    return {
+      message: data.choices[0].message,
+      usage: {
+        promptTokens: data.usage.prompt_tokens,
+        completionTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens,
+      },
+    };
+  },
+};
+```
+
+## Memory Provider Example
+
+```typescript
+import type { SimpleClawPluginService } from "simpleclaw/plugin-sdk";
+
+export const vectorMemoryProvider: SimpleClawPluginService = {
+  id: "vector-memory",
+  name: "Vector Memory Store",
+  
+  async init(ctx) {
+    // Initialize vector database connection
+    this.db = await connectToVectorDB(ctx.config.get("providers.vectormemory"));
+  },
+  
+  async invoke(ctx, request) {
+    const { action, params } = request;
+    
+    switch (action) {
+      case "store":
+        return await this.storeMemory(params);
+      
+      case "search":
+        return await this.searchMemory(params);
+      
+      case "recall":
+        return await this.recallContext(params);
+      
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+  },
+  
+  async storeMemory(params) {
+    const { sessionKey, text, embedding } = params;
+    
+    await this.db.insert({
+      sessionKey,
+      text,
+      embedding,
+      timestamp: Date.now(),
+    });
+    
+    return { ok: true };
+  },
+  
+  async searchMemory(params) {
+    const { query, limit = 10 } = params;
+    
+    const results = await this.db.search({
+      query,
+      limit,
+    });
+    
+    return {
+      results: results.map(r => ({
+        text: r.text,
+        score: r.score,
+        timestamp: r.timestamp,
+      })),
+    };
+  },
+};
+```
+
+## Tool Provider Example
+
+```typescript
+import type { SimpleClawPluginService, AnyAgentTool } from "simpleclaw/plugin-sdk";
+import { Type } from "@sinclair/typebox";
+
+export const customToolProvider: SimpleClawPluginService = {
+  id: "custom-tools",
+  name: "Custom Tool Provider",
+  
+  async init(ctx) {
+    // Register custom tools
+    ctx.registerTools([
+      {
+        name: "weather_get",
+        description: "Get current weather for a location",
+        input_schema: Type.Object({
+          location: Type.String({ description: "City name or coordinates" }),
+          units: Type.Optional(Type.Union([
+            Type.Literal("celsius"),
+            Type.Literal("fahrenheit"),
+          ])),
+        }),
+        handler: async (input) => {
+          const response = await fetch(
+            `https://api.weather.example.com/current?location=${input.location}&units=${input.units || "celsius"}`
+          );
+          
+          const data = await response.json();
+          
+          return {
+            temperature: data.temp,
+            conditions: data.conditions,
+            humidity: data.humidity,
+          };
+        },
+      },
+      
+      {
+        name: "calendar_create_event",
+        description: "Create a calendar event",
+        input_schema: Type.Object({
+          title: Type.String(),
+          start: Type.String({ description: "ISO 8601 datetime" }),
+          duration: Type.Number({ description: "Duration in minutes" }),
+          description: Type.Optional(Type.String()),
+        }),
+        handler: async (input) => {
+          const eventId = await createCalendarEvent({
+            title: input.title,
+            start: new Date(input.start),
+            duration: input.duration,
+            description: input.description,
+          });
+          
+          return {
+            eventId,
+            url: `https://calendar.example.com/events/${eventId}`,
+          };
+        },
+      },
+    ]);
+  },
+};
+```
+
+## HTTP Routes
+
+Providers can expose HTTP endpoints:
+
+```typescript
+import type { SimpleClawPluginService } from "simpleclaw/plugin-sdk";
+import { registerPluginHttpRoute } from "simpleclaw/plugin-sdk";
+
+export const webhookProvider: SimpleClawPluginService = {
+  id: "custom-webhooks",
+  
+  async init(ctx) {
+    // Register HTTP routes
+    registerPluginHttpRoute({
+      pluginId: "custom-webhooks",
+      method: "POST",
+      path: "/webhooks/custom",
+      handler: async (req, res) => {
+        const body = await req.json();
+        
+        // Process webhook
+        await processWebhook(body);
+        
+        res.json({ ok: true });
+      },
+    });
+  },
+};
+```
+
+## Configuration
+
+Define provider config schema:
+
+```typescript
+import { z } from "zod";
+import { emptyPluginConfigSchema } from "simpleclaw/plugin-sdk";
+
+export const CustomLLMConfigSchema = z.object({
+  apiKey: z.string(),
+  baseUrl: z.string().url().optional(),
+  timeout: z.number().default(30000),
+  retries: z.number().default(3),
+});
+
+// Export schema for validation
+export const configSchema = {
+  schema: CustomLLMConfigSchema.shape,
+  uiHints: {
+    apiKey: {
+      label: "API Key",
+      sensitive: true,
+      help: "Get your API key from the provider dashboard",
+    },
+    timeout: {
+      label: "Request Timeout (ms)",
+      advanced: true,
+    },
+  },
+};
+```
+
+## Authentication Flow
+
+Implement OAuth or API key auth:
+
+```typescript
+import type {
+  ProviderAuthContext,
+  ProviderAuthResult,
+} from "simpleclaw/plugin-sdk";
+import { buildOauthProviderAuthResult } from "simpleclaw/plugin-sdk";
+
+export async function auth(ctx: ProviderAuthContext): Promise<ProviderAuthResult> {
+  const { code, redirectUri } = ctx;
+  
+  // Exchange code for access token
+  const response = await fetch("https://api.example.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      code,
+      client_id: process.env.CLIENT_ID,
+      client_secret: process.env.CLIENT_SECRET,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
+  });
+  
+  const data = await response.json();
+  
+  // Get user profile
+  const profileResponse = await fetch("https://api.example.com/user", {
+    headers: { "Authorization": `Bearer ${data.access_token}` },
+  });
+  
+  const profile = await profileResponse.json();
+  
+  return buildOauthProviderAuthResult({
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+    profile: {
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+    },
+  });
+}
+```
+
+## Plugin Packaging
+
+```json
+{
+  "name": "@simpleclaw/provider-custom",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "simpleclaw": {
+    "extensions": [
+      {
+        "type": "provider",
+        "id": "custom-llm",
+        "entry": "./dist/index.js"
+      }
+    ]
+  },
+  "dependencies": {
+    "simpleclaw": "^2026.3.0",
+    "@sinclair/typebox": "^0.32.0"
+  }
+}
+```
+
+## Testing
+
+```typescript
+import { describe, test, expect } from "vitest";
+import { customLLMProvider } from "./index.js";
+
+describe("Custom LLM provider", () => {
+  test("authenticates successfully", async () => {
+    const ctx = createMockAuthContext();
+    const result = await customLLMProvider.auth(ctx);
+    
+    expect(result.success).toBe(true);
+    expect(result.profile).toBeDefined();
+  });
+  
+  test("invokes chat completion", async () => {
+    const ctx = createMockContext();
+    const response = await customLLMProvider.invoke(ctx, {
+      model: "custom-llm/gpt-ultra",
+      messages: [
+        { role: "user", content: "Hello!" },
+      ],
+    });
+    
+    expect(response.message).toBeDefined();
+    expect(response.usage.totalTokens).toBeGreaterThan(0);
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Channel Plugins" icon="comments" href="/api/channel-plugins">
+    Build messaging platform integrations
+  </Card>
+  <Card title="Plugin SDK" icon="puzzle-piece" href="/api/plugin-sdk">
+    Complete SDK reference
+  </Card>
+</CardGroup>
