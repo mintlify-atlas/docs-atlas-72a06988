@@ -1,0 +1,164 @@
+{
+  "projectType": "saas",
+  "projectName": "SimpleClaw",
+  "projectDescription": "Personal AI assistant that connects to your messaging channels (WhatsApp, Telegram, Slack, Discord, and more) with voice, canvas, and multi-agent capabilities.",
+  "theme": "palm",
+  "primaryColor": "#E74C3C",
+  "lightColor": "#FF6B6B",
+  "darkColor": "#C0392B",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation",
+              "configuration"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/gateway",
+              "concepts/agents",
+              "concepts/routing",
+              "concepts/sessions",
+              "concepts/models"
+            ]
+          },
+          {
+            "group": "Messaging Channels",
+            "pages": [
+              "channels/overview",
+              "channels/whatsapp",
+              "channels/telegram",
+              "channels/discord",
+              "channels/slack",
+              "channels/signal",
+              "channels/imessage",
+              "channels/more"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/voice",
+              "features/canvas",
+              "features/browser",
+              "features/automation",
+              "features/skills"
+            ]
+          },
+          {
+            "group": "Platforms",
+            "pages": [
+              "platforms/macos",
+              "platforms/ios",
+              "platforms/android",
+              "platforms/linux",
+              "platforms/docker"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/overview",
+              "security/pairing",
+              "security/allowlists"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "cli/gateway",
+              "cli/agent",
+              "cli/message",
+              "cli/channels",
+              "cli/config",
+              "cli/onboard",
+              "cli/doctor"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Gateway API",
+            "pages": [
+              "api/overview",
+              "api/websocket",
+              "api/protocol"
+            ]
+          },
+          {
+            "group": "Plugin SDK",
+            "pages": [
+              "api/plugin-sdk",
+              "api/channel-plugins",
+              "api/provider-plugins"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Setup Guides",
+            "pages": [
+              "guides/first-chat",
+              "guides/adding-channels",
+              "guides/multi-agent-setup",
+              "guides/voice-setup"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "guides/remote-gateway",
+              "guides/custom-skills",
+              "guides/webhooks",
+              "guides/troubleshooting"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-channel messaging gateway (WhatsApp, Telegram, Slack, Discord, Signal, iMessage, and more)",
+    "Multi-agent routing with isolated workspaces and per-agent sessions",
+    "Voice wake and talk mode for macOS, iOS, and Android",
+    "Live Canvas with A2UI for agent-driven visual workspace",
+    "Browser control with Playwright integration",
+    "Native apps for macOS, iOS, and Android",
+    "Cron jobs, webhooks, and automation",
+    "Skills platform with bundled and workspace skills",
+    "Security-first with DM pairing and allowlists",
+    "Local-first gateway with WebSocket control plane"
+  ],
+  "publicApiSurface": [
+    "openclaw gateway",
+    "openclaw agent",
+    "openclaw message send",
+    "openclaw channels status",
+    "openclaw config",
+    "openclaw onboard",
+    "openclaw doctor",
+    "openclaw pairing approve",
+    "WebSocket Gateway API",
+    "Plugin SDK - ChannelPlugin interface",
+    "Plugin SDK - ProviderPlugin interface"
+  ]
+}
