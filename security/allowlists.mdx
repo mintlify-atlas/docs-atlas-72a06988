@@ -30,7 +30,7 @@ Static allowlists defined in your `openclaw.json` or `openclaw.yaml` configurati
 
 Automatically maintained when you approve pairing requests:
 
-- Stored in `~/.openclaw/credentials/<channel>-allowFrom.json`
+- Stored in `~/.simpleclaw/credentials/<channel>-allowFrom.json`
 - Updated when you run `simpleclaw pairing approve <channel> <code>`
 - Persists across SimpleClaw restarts
 
@@ -305,7 +305,7 @@ SimpleClaw warns about allowlist entries that may change over time.
 Read from pairing store:
 
 ```bash
-# This reads ~/.openclaw/credentials/<channel>-allowFrom.json
+# This reads ~/.simpleclaw/credentials/<channel>-allowFrom.json
 simpleclaw pairing list telegram
 ```
 
@@ -323,7 +323,7 @@ This adds the sender to the dynamic allowlist.
 
 Currently, removal requires manual editing:
 
-1. Edit `~/.openclaw/credentials/<channel>-allowFrom.json`
+1. Edit `~/.simpleclaw/credentials/<channel>-allowFrom.json`
 2. Remove the sender ID from the `allowFrom` array
 3. Restart SimpleClaw or reload configuration
 
@@ -467,8 +467,8 @@ simpleclaw security audit --fix  # Auto-fix some issues
 Protect allowlist files with proper permissions:
 
 ```bash
-chmod 600 ~/.openclaw/credentials/*-allowFrom.json
-chmod 600 ~/.openclaw/credentials/*-pairing.json
+chmod 600 ~/.simpleclaw/credentials/*-allowFrom.json
+chmod 600 ~/.simpleclaw/credentials/*-pairing.json
 ```
 
 SimpleClaw's security audit will warn if permissions are too permissive.

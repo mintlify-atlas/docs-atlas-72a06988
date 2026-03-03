@@ -24,7 +24,7 @@ function loadSkillEntries(workspaceDir: string): SkillEntry[] {
   // Load order (last wins for name conflicts):
   // 1. Extra dirs (config.skills.load.extraDirs)
   // 2. Bundled skills (SimpleClaw built-in)
-  // 3. Managed skills (~/.openclaw/skills)
+  // 3. Managed skills (~/.simpleclaw/skills)
   // 4. Personal agents skills (~/.agents/skills)
   // 5. Project agents skills (<workspace>/.agents/skills)
   // 6. Workspace skills (<workspace>/skills)
@@ -162,7 +162,7 @@ Install types: `brew`, `node`, `go`, `uv`, `download`
 ### Default Locations
 
 ```
-1. ~/.openclaw/skills/          # Managed skills
+1. ~/.simpleclaw/skills/          # Managed skills
 2. ~/.agents/skills/            # Personal agent skills
 3. <workspace>/.agents/skills/  # Project agent skills
 4. <workspace>/skills/          # Workspace skills (highest priority)
@@ -328,7 +328,7 @@ import { loadWorkspaceSkillEntries } from "simpleclaw/agents/skills";
 
 const entries = loadWorkspaceSkillEntries(workspaceDir, {
   config,
-  managedSkillsDir: "~/.openclaw/skills",
+  managedSkillsDir: "~/.simpleclaw/skills",
   bundledSkillsDir: "/opt/simpleclaw/skills"
 });
 
@@ -409,7 +409,7 @@ Skill paths are compacted to save prompt tokens (src/agents/skills/workspace.ts:
 
 ```
 Before: /Users/alice/.openclaw/skills/github/SKILL.md
-After:  ~/.openclaw/skills/github/SKILL.md
+After:  ~/.simpleclaw/skills/github/SKILL.md
 
 Savings: ~6 tokens per skill × 150 skills = ~900 tokens
 ```
@@ -419,7 +419,7 @@ Savings: ~6 tokens per skill × 150 skills = ~900 tokens
 Auto-detects nested `skills/` directories:
 
 ```
-~/.openclaw/custom/
+~/.simpleclaw/custom/
   skills/              # Detected as real root
     github/SKILL.md
     docker/SKILL.md
@@ -430,7 +430,7 @@ Auto-detects nested `skills/` directories:
 When same skill exists in multiple locations, higher priority wins:
 
 ```
-~/.openclaw/skills/github/     # Priority 3
+~/.simpleclaw/skills/github/     # Priority 3
 ~/project/skills/github/       # Priority 6 (wins)
 ```
 

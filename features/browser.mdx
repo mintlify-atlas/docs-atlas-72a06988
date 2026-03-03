@@ -65,7 +65,7 @@ browser:
 
 Profiles are isolated browser instances with separate:
 
-- User data directory (`~/.openclaw/browser/<profile>`)
+- User data directory (`~/.simpleclaw/browser/<profile>`)
 - CDP port
 - Extension state
 - Cookies, storage, history
@@ -352,7 +352,7 @@ browser:
 Browser profiles persist state to disk:
 
 ```
-~/.openclaw/browser/
+~/.simpleclaw/browser/
   default/               # Default profile user data
     Cache/
     Cookies
@@ -384,7 +384,7 @@ curl -X POST http://localhost:8910/agent/storage/load \
   }'
 ```
 
-Storage saved to `~/.openclaw/browser/<profile>/storage/<key>.json`
+Storage saved to `~/.simpleclaw/browser/<profile>/storage/<key>.json`
 
 ## Screenshots
 
@@ -417,7 +417,7 @@ Screenshot options:
 
 Check logs:
 ```bash
-tail -f ~/.openclaw/logs/gateway.log | grep browser
+tail -f ~/.simpleclaw/logs/gateway.log | grep browser
 ```
 
 Verify executable:

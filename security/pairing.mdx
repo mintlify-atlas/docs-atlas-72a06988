@@ -143,7 +143,7 @@ Pairing is supported on these channels:
 
 ## Storage
 
-Pairing state is stored under `~/.openclaw/credentials/`:
+Pairing state is stored under `~/.simpleclaw/credentials/`:
 
 ### Pending Requests
 
@@ -156,7 +156,7 @@ Pairing state is stored under `~/.openclaw/credentials/`:
   - `lastSeenAt`: ISO timestamp when sender last attempted to message
   - `meta`: Optional metadata (account ID, etc.)
 
-Example: `~/.openclaw/credentials/telegram-pairing.json`
+Example: `~/.simpleclaw/credentials/telegram-pairing.json`
 
 ```json
 {
@@ -178,7 +178,7 @@ Example: `~/.openclaw/credentials/telegram-pairing.json`
 - **Format**: Array of approved sender IDs
 - **Scope**: Can be channel-level or account-level
 
-Example: `~/.openclaw/credentials/telegram-allowFrom.json`
+Example: `~/.simpleclaw/credentials/telegram-allowFrom.json`
 
 ```json
 {
@@ -205,7 +205,7 @@ For channels with multiple accounts, allowlists can be scoped:
 Pairing files gate access to your assistant:
 
 - Store `*-pairing.json` and `*-allowFrom.json` as sensitive
-- Protect `~/.openclaw/credentials/` with proper file permissions
+- Protect `~/.simpleclaw/credentials/` with proper file permissions
 - Do not share pairing codes publicly
 
 ### Pairing Code Security
@@ -259,7 +259,7 @@ You can pair devices entirely from Telegram using the `device-pair` plugin:
 
 ### Device Pairing Storage
 
-Stored under `~/.openclaw/devices/`:
+Stored under `~/.simpleclaw/devices/`:
 
 - `pending.json`: Pending device pairing requests (expire after 5 minutes)
 - `paired.json`: Paired devices with authentication tokens

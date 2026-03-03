@@ -7,7 +7,7 @@ SimpleClaw's Canvas feature provides an interactive web interface for building c
 
 ## Overview
 
-Canvas Host is a local HTTP server that serves interactive HTML/JS/CSS from `~/.openclaw/state/canvas/` and provides:
+Canvas Host is a local HTTP server that serves interactive HTML/JS/CSS from `~/.simpleclaw/state/canvas/` and provides:
 
 - Live reload during development
 - WebSocket-based action bridge (A2UI)
@@ -25,7 +25,7 @@ Serves user content from workspace directory (src/canvas-host/server.ts:399):
 ```typescript
 const server = await startCanvasHost({
   runtime,
-  rootDir: "~/.openclaw/state/canvas",
+  rootDir: "~/.simpleclaw/state/canvas",
   port: 0,  // Auto-assign
   listenHost: "127.0.0.1",
   liveReload: true
@@ -55,7 +55,7 @@ window.simpleClawSendUserAction({
 
 ## Canvas Root Setup
 
-Default canvas location: `~/.openclaw/state/canvas/`
+Default canvas location: `~/.simpleclaw/state/canvas/`
 
 On first run, SimpleClaw creates a default `index.html` (src/canvas-host/server.ts:58):
 
@@ -214,7 +214,7 @@ Or set `canvasHost.enabled: false` in config.
 
 1. **Edit canvas files:**
    ```bash
-   cd ~/.openclaw/state/canvas
+   cd ~/.simpleclaw/state/canvas
    vim index.html
    ```
 
@@ -227,7 +227,7 @@ Or set `canvasHost.enabled: false` in config.
 
 4. **Check logs:**
    ```bash
-   tail -f ~/.openclaw/logs/gateway.log | grep canvas
+   tail -f ~/.simpleclaw/logs/gateway.log | grep canvas
    ```
 
 ## A2UI Demo App
@@ -314,7 +314,7 @@ globalThis.simpleClawSendUserAction = sendUserAction;
 Canvas can detect nested `skills/` directories:
 
 ```bash
-~/.openclaw/state/canvas/
+~/.simpleclaw/state/canvas/
   skills/              # Detected as real root
     github/SKILL.md
     slack/SKILL.md
@@ -348,7 +348,7 @@ console.log(typeof window.simpleClawSendUserAction);
 
 Verify path is under canvas root:
 ```bash
-ls ~/.openclaw/state/canvas/index.html
+ls ~/.simpleclaw/state/canvas/index.html
 ```
 
 ## API Reference

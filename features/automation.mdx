@@ -32,7 +32,7 @@ class CronService {
 }
 ```
 
-**Storage:** Jobs persist to `~/.openclaw/cron/jobs.json`
+**Storage:** Jobs persist to `~/.simpleclaw/cron/jobs.json`
 
 ## Job Types
 
@@ -262,7 +262,7 @@ type CronJobState = {
 ### Daily reminder
 
 ```bash
-openclaw cron add \
+simpleclaw cron add \
   --name "Standup reminder" \
   --schedule "0 9 * * 1-5" \
   --message "Time for standup meeting!" \
@@ -273,7 +273,7 @@ openclaw cron add \
 ### Weekly report
 
 ```bash
-openclaw cron add \
+simpleclaw cron add \
   --name "Weekly summary" \
   --schedule "0 17 * * 5" \
   --message "Summarize this week's activity" \
@@ -285,7 +285,7 @@ openclaw cron add \
 ### One-time task
 
 ```bash
-openclaw cron add \
+simpleclaw cron add \
   --name "Future reminder" \
   --at "2024-03-20T15:00:00Z" \
   --message "Don't forget the dentist appointment!" \
@@ -295,7 +295,7 @@ openclaw cron add \
 ### Background maintenance
 
 ```bash
-openclaw cron add \
+simpleclaw cron add \
   --name "Session cleanup" \
   --schedule "0 3 * * *" \
   --kind systemEvent \
@@ -307,29 +307,29 @@ openclaw cron add \
 
 ```bash
 # List jobs
-openclaw cron list
-openclaw cron list --all  # Include disabled
+simpleclaw cron list
+simpleclaw cron list --all  # Include disabled
 
 # Show job details
-openclaw cron get <job-id>
+simpleclaw cron get <job-id>
 
 # Enable/disable job
-openclaw cron enable <job-id>
-openclaw cron disable <job-id>
+simpleclaw cron enable <job-id>
+simpleclaw cron disable <job-id>
 
 # Update job
-openclaw cron update <job-id> \
+simpleclaw cron update <job-id> \
   --schedule "0 10 * * *" \
   --message "Updated message"
 
 # Run job now (force)
-openclaw cron run <job-id> --force
+simpleclaw cron run <job-id> --force
 
 # Delete job
-openclaw cron remove <job-id>
+simpleclaw cron remove <job-id>
 
 # Service status
-openclaw cron status
+simpleclaw cron status
 ```
 
 ## Programmatic API
@@ -407,7 +407,7 @@ function normalizeHttpWebhookUrl(value: unknown): string | null {
 
 ## Storage Format
 
-Jobs are stored in `~/.openclaw/cron/jobs.json`:
+Jobs are stored in `~/.simpleclaw/cron/jobs.json`:
 
 ```json
 {
@@ -462,24 +462,24 @@ Jobs are stored in `~/.openclaw/cron/jobs.json`:
 
 Check if enabled:
 ```bash
-openclaw cron get <job-id> | grep enabled
+simpleclaw cron get <job-id> | grep enabled
 ```
 
 Check schedule errors:
 ```bash
-openclaw cron get <job-id> | grep scheduleErrorCount
+simpleclaw cron get <job-id> | grep scheduleErrorCount
 ```
 
 **Delivery failing?**
 
 Check delivery status:
 ```bash
-openclaw cron get <job-id> | grep lastDeliveryStatus
+simpleclaw cron get <job-id> | grep lastDeliveryStatus
 ```
 
 Verify channel is configured:
 ```bash
-openclaw channels status
+simpleclaw channels status
 ```
 
 **Webhook not received?**
